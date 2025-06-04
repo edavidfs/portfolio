@@ -1,0 +1,33 @@
+services:
+  web:
+    build: .
+    # The command in Dockerfile is 'gunicorn ... portfolio_manager.wsgi:application'
+    # The command here overrides the Dockerfile's CMD for development.
+    # Path to manage.py is relative to the WORKDIR /app, 
+    # and considering the volume mount `- .:/app`,
+    # manage.py is effectively at /app/portfolio_manager/manage.py
+    command: python portfolio_manager/manage.py runserver 0.0.0.0:8008
+    volumes:
+      - .:/app # Mounts the host's project root (containing Dockerfile, requirements.txt, portfolio_manager/) to /app in container
+    ports:
+      - "8008:8008"
+    depends_on:
+      - db
+    environment:
+      - DJANGO_SETTINGS_MODULE=portfolio_manager.settings # This refers to app/portfolio_manager/portfolio_manager/settings.py
+      - DATABASE_URL=postgres://portfolio_user:portfolio_password@db:5432/portfolio_db
+      - SECRET_KEY=somedevelopmentsecretkey # Added for development
+      - DEBUG=True # Added for development
+
+  db:
+    image: postgres:13-alpine
+    platform: linux/amd64
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=portfolio_db
+      - POSTGRES_USER=portfolio_user
+      - POSTGRES_PASSWORD=portfolio_password
+
+volumes:
+  postgres_data:

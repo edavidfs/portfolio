@@ -1,0 +1,6 @@
+django~=4.2
+djangorestframework
+gunicorn
+psycopg2-binary
+python-dotenv
+dj_database_url
