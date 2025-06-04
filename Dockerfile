@@ -14,6 +14,7 @@ WORKDIR /app
 # Install Python dependencies
 # requirements.txt is at the root of the repo, so it will be copied from there.
 COPY requirements.txt /app/
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy project code
@@ -23,8 +24,8 @@ COPY portfolio_manager/ /app/
 # This means the WSGI application path will be portfolio_manager.wsgi:application, which is correct.
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8008
 
 # Run gunicorn
 # The project name as per settings.py and wsgi.py is 'portfolio_manager'
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "portfolio_manager.wsgi:application"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8008", "portfolio_manager.wsgi:application"]

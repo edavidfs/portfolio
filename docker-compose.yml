@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   web:
     build: .
@@ -8,11 +6,11 @@ services:
     # Path to manage.py is relative to the WORKDIR /app, 
     # and considering the volume mount `- .:/app`,
     # manage.py is effectively at /app/portfolio_manager/manage.py
-    command: python portfolio_manager/manage.py runserver 0.0.0.0:8000
+    command: python portfolio_manager/manage.py runserver 0.0.0.0:8008
     volumes:
       - .:/app # Mounts the host's project root (containing Dockerfile, requirements.txt, portfolio_manager/) to /app in container
     ports:
-      - "8000:8000"
+      - "8008:8008"
     depends_on:
       - db
     environment:
@@ -23,6 +21,7 @@ services:
 
   db:
     image: postgres:13-alpine
+    platform: linux/amd64
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
