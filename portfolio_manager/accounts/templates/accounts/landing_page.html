@@ -1,0 +1,15 @@
+{% extends 'accounts/base.html' %}
+
+{% block title %}Welcome - Portfolio Manager{% endblock %}
+
+{% block content %}
+    <h1>Welcome to the Portfolio Manager</h1>
+    <p>This is the main landing page for the application.</p>
+
+    {% if user.is_authenticated %}
+        <p>You are logged in as {{ user.username }}. You can manage your portfolio or <a href="{% url 'accounts:update_account' %}">update your account</a>.</p>
+        <p>Access your <a href="{% url 'dashboard' %}">Dashboard</a>.</p> {# Assuming 'dashboard' URL will be created #}
+    {% else %}
+        <p>To get started, please <a href="{% url 'accounts:login' %}">login</a> or <a href="{% url 'accounts:register' %}">register</a> for an account.</p>
+    {% endif %}
+{% endblock %}

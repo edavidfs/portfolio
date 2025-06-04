@@ -1,0 +1,24 @@
+{% extends 'accounts/base.html' %}
+
+{% block title %}Update Account - Portfolio Manager{% endblock %}
+
+{% block content %}
+    <h2>Update Account</h2>
+
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Update Account</button>
+    </form>
+    <br>
+    <p><a href="{% url 'accounts:landing_page' %}">Back to Landing Page</a></p>
+    {# Or link to 'dashboard' if it exists: <p><a href="{% url 'dashboard' %}">Back to Dashboard</a></p> #}
+{% endblock %}

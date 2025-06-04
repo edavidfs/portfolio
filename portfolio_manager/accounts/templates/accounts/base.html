@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Portfolio Manager{% endblock %}</title>
+    {# Add links to CSS files here if you have any #}
+</head>
+<body>
+    <nav>
+        <ul>
+            {% if user.is_authenticated %}
+                <li>Welcome, {{ user.username }}!</li>
+                <li><a href="{% url 'accounts:update_account' %}">Update Profile</a></li>
+                <li><a href="{% url 'accounts:logout' %}">Logout</a></li>
+                {# Add other authenticated user links, e.g., Dashboard #}
+                <li><a href="{% url 'accounts:landing_page' %}">Home</a></li>
+            {% else %}
+                <li><a href="{% url 'accounts:login' %}">Login</a></li>
+                <li><a href="{% url 'accounts:register' %}">Register</a></li>
+                <li><a href="{% url 'accounts:landing_page' %}">Home</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+
+    <hr>
+
+    <main>
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <hr>
+    <footer>
+        <p>&copy; 2024 Portfolio Manager</p>
+    </footer>
+
+</body>
+</html>
