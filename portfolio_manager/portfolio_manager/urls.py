@@ -16,17 +16,18 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from accounts import views as account_views # Import views from accounts app
-from django.http import HttpResponse # For dummy view
+from accounts import views as account_views
+from portfolio import views as portfolio_views # Import portfolio views
 
-# Dummy view for testing dashboard redirect
-def dummy_dashboard_view(request):
-    return HttpResponse("Mock Dashboard Page. User: " + request.user.username if request.user.is_authenticated else "Guest")
+# Dummy view for testing dashboard redirect - This will be removed.
+# def dummy_dashboard_view(request):
+#     return HttpResponse("Mock Dashboard Page. User: " + request.user.username if request.user.is_authenticated else "Guest")
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('portfolio/', include('portfolio.urls')),
-    path('accounts/', include('accounts.urls')), # Include accounts app URLs
-    path('', account_views.landing_page_view, name='site_landing_page'), # Root URL for the site
-    path('dashboard/', dummy_dashboard_view, name='dashboard'), # Dummy dashboard URL for tests
+    path('portfolio/', include('portfolio.urls')), # portfolio app URLs are under /portfolio/
+    path('accounts/', include('accounts.urls')),
+    path('', account_views.landing_page_view, name='site_landing_page'),
+    # New dashboard URL at root level, pointing to the portfolio app's view
+    path('dashboard/', portfolio_views.dashboard_placeholder_view, name='dashboard'),
 ]

@@ -1,0 +1,19 @@
+{% extends 'accounts/base.html' %}
+
+{% block title %}Dashboard - Portfolio Manager{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="p-5 mb-4 bg-light rounded-3 shadow-sm">
+    <div class="container-fluid py-3">
+      <h1 class="display-5 fw-bold">Dashboard</h1>
+      <p class="fs-4">Welcome to your dashboard, {{ user.username }}!</p>
+      <hr class="my-4">
+      <p class="lead">
+        The full dashboard functionality, including your portfolio balance and evolution, is coming soon.
+      </p>
+      <p>For now, you can <a href="{% url 'accounts:update_account' %}">update your profile</a> or <a href="{% url 'accounts:logout' %}">logout</a>.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

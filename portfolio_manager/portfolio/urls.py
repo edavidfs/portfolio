@@ -13,5 +13,6 @@ router.register(r'portfolios', PortfolioViewSet, basename='portfolio')
 
 urlpatterns = [
     path('upload-csv/', views.upload_csv_view, name='upload_csv'), # Keep existing CSV upload
+    path('dashboard/', views.dashboard_placeholder_view, name='dashboard'), # New dashboard placeholder
     path('api/', include(router.urls)), # Add DRF URLs under 'api/' prefix within the app
 ]

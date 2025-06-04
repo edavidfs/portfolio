@@ -59,3 +59,9 @@ class PortfolioViewSet(viewsets.ModelViewSet): # Changed to ModelViewSet for fut
     queryset = Portfolio.objects.all()
     serializer_class = PortfolioSerializer
     # permission_classes = [permissions.IsAuthenticatedOrReadOnly] # Optional for now
+
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def dashboard_placeholder_view(request):
+    return render(request, 'portfolio/dashboard_placeholder.html')
