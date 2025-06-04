@@ -3,13 +3,42 @@
 {% block title %}Welcome - Portfolio Manager{% endblock %}
 
 {% block content %}
-    <h1>Welcome to the Portfolio Manager</h1>
-    <p>This is the main landing page for the application.</p>
+<div class="p-5 mb-4 bg-light rounded-3 shadow-sm">
+    <div class="container-fluid py-4"> {# Reduced py-5 to py-4 for slightly less vertical padding #}
+        <h1 class="display-5 fw-bold">Welcome to Portfolio Manager</h1>
+        <p class="col-md-10 fs-4">Your personal platform to manage and track your investment portfolio effectively. Stay updated with your financial progress.</p>
+        <hr class="my-4">
 
-    {% if user.is_authenticated %}
-        <p>You are logged in as {{ user.username }}. You can manage your portfolio or <a href="{% url 'accounts:update_account' %}">update your account</a>.</p>
-        <p>Access your <a href="{% url 'dashboard' %}">Dashboard</a>.</p> {# Assuming 'dashboard' URL will be created #}
-    {% else %}
-        <p>To get started, please <a href="{% url 'accounts:login' %}">login</a> or <a href="{% url 'accounts:register' %}">register</a> for an account.</p>
-    {% endif %}
+        {% if user.is_authenticated %}
+            <p class="fs-5 mb-3">You are logged in as <strong>{{ user.username }}</strong>.</p>
+            <a class="btn btn-primary btn-lg me-md-2 mb-2 mb-md-0" href="{% url 'accounts:update_account' %}" role="button">Update Profile</a>
+            <a class="btn btn-secondary btn-lg mb-2 mb-md-0" href="{% url 'accounts:logout' %}" role="button">Logout</a>
+            {# Example: Link to a dashboard if it exists. The dummy one redirects to a simple HTTPResponse. #}
+            {# <a class="btn btn-info btn-lg ms-md-2" href="{% url 'dashboard' %}" role="button">Go to Dashboard</a> #}
+        {% else %}
+            <p class="fs-5 mb-3">Join us today or log in to access your portfolio.</p>
+            <a class="btn btn-primary btn-lg me-md-2 mb-2 mb-md-0" href="{% url 'accounts:login' %}" role="button">Login</a>
+            <a class="btn btn-success btn-lg mb-2 mb-md-0" href="{% url 'accounts:register' %}" role="button">Register</a>
+        {% endif %}
+    </div>
+</div>
+
+{# Optional: Example of a features section (currently commented out)
+<div class="row align-items-md-stretch mt-4">
+    <div class="col-md-6 mb-4">
+        <div class="h-100 p-5 text-white bg-dark rounded-3">
+            <h2>Track Investments</h2>
+            <p>Keep a detailed record of all your investments in one place. Monitor performance and growth over time.</p>
+            <button class="btn btn-outline-light" type="button">Learn More</button>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="h-100 p-5 bg-light border rounded-3">
+            <h2>Analyze Performance</h2>
+            <p>Gain insights into your portfolio with comprehensive analytics and reporting tools. Make informed decisions.</p>
+            <button class="btn btn-outline-secondary" type="button">Explore Features</button>
+        </div>
+    </div>
+</div>
+#}
 {% endblock %}
