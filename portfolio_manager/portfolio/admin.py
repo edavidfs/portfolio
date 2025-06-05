@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Asset, OptionContract, Transaction, Portfolio
+from .models import Asset, OptionContract, Transaction, Portfolio, InvestmentAccount, CurrencyHolding, AccountMovement
 
 # Register your models here.
 
@@ -39,3 +39,34 @@ class PortfolioAdmin(admin.ModelAdmin):
     filter_horizontal = ('assets',) # For easier management of ManyToManyField
 
 admin.site.register(Portfolio, PortfolioAdmin)
+
+
+# Admin classes for new Investment Account models
+
+class InvestmentAccountAdmin(admin.ModelAdmin):
+    list_display = ('name', 'user', 'base_currency')
+    list_filter = ('user', 'base_currency')
+    search_fields = ('name', 'user__username')
+    # Potentially add inlines for CurrencyHolding if desired for direct management here
+
+admin.site.register(InvestmentAccount, InvestmentAccountAdmin)
+
+class CurrencyHoldingAdmin(admin.ModelAdmin):
+    list_display = ('account', 'currency', 'balance')
+    list_filter = ('currency', 'account__user') # Filter by user of the parent account
+    search_fields = ('account__name', 'currency')
+    # readonly_fields = ('balance',) # Balance should ideally be modified via movements
+
+admin.site.register(CurrencyHolding, CurrencyHoldingAdmin)
+
+class AccountMovementAdmin(admin.ModelAdmin):
+    list_display = ('date', 'user', 'account', 'currency_holding_display', 'movement_type', 'amount', 'related_movement')
+    list_filter = ('movement_type', 'user', 'account', 'currency_holding__currency')
+    search_fields = ('user__username', 'account__name', 'currency_holding__currency', 'description')
+    readonly_fields = ('date',) # Usually date is auto-set
+
+    def currency_holding_display(self, obj):
+        return str(obj.currency_holding)
+    currency_holding_display.short_description = 'Currency Holding'
+
+admin.site.register(AccountMovement, AccountMovementAdmin)

@@ -1,0 +1,76 @@
+{% extends 'portfolio/base.html' %}
+
+{% block content %}
+    <h1>{{ account.name }}</h1>
+    <p>Base Currency: {{ account.base_currency }}</p>
+    <p><a href="{% url 'portfolio:investmentaccount_list' %}">Back to Accounts List</a></p>
+
+    <h2>Holdings</h2>
+    {% if currency_holdings %}
+        <ul>
+            {% for holding in currency_holdings %}
+                <li>
+                    <strong>{{ holding.currency }}: {{ holding.balance }}</strong>
+
+                    <div style="margin-left: 20px; margin-bottom: 10px;">
+                        <form method="post" action="{% url 'portfolio:deposit_funds' holding_pk=holding.pk %}" style="display: inline-block; margin-right: 10px;">
+                            {% csrf_token %}
+                            {{ deposit_form.as_p }}
+                            <button type="submit">Deposit</button>
+                        </form>
+                        <form method="post" action="{% url 'portfolio:withdraw_funds' holding_pk=holding.pk %}" style="display: inline-block;">
+                            {% csrf_token %}
+                            {{ withdraw_form.as_p }}
+                            <button type="submit">Withdraw</button>
+                        </form>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No currency holdings in this account yet.</p>
+    {% endif %}
+
+    <h2>Add New Currency Holding</h2>
+    <form method="post" action="{% url 'portfolio:add_currency_holding' account_pk=account.pk %}">
+        {% csrf_token %}
+        {{ currency_holding_form.as_p }}
+        <button type="submit">Add Currency</button>
+    </form>
+
+    <h2>Recent Movements</h2>
+    {% if movements %}
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Currency</th>
+                    <th>Description</th>
+                    <th>Related To</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for movement in movements %}
+                    <tr>
+                        <td>{{ movement.date|date:"Y-m-d H:i" }}</td>
+                        <td>{{ movement.get_movement_type_display }}</td>
+                        <td>{{ movement.amount }}</td>
+                        <td>{{ movement.currency_holding.currency }}</td>
+                        <td>{{ movement.description|default:"" }}</td>
+                        <td>
+                            {% if movement.related_movement %}
+                                {{ movement.related_movement.pk }} ({{ movement.related_movement.get_movement_type_display }})
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No movements recorded for this account yet.</p>
+    {% endif %}
+{% endblock %}

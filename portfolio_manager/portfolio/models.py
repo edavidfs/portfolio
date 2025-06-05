@@ -63,3 +63,41 @@ class Portfolio(models.Model):
         # Returns all transactions for all assets in this portfolio
         # Ensure Transaction model is accessible here (it is, as it's in the same file)
         return Transaction.objects.filter(asset__in=self.assets.all()).order_by('-date', '-id')
+
+class InvestmentAccount(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    base_currency = models.CharField(max_length=3)  # e.g., "USD", "EUR"
+
+    def __str__(self):
+        return f"{self.name} ({self.user.username})"
+
+class CurrencyHolding(models.Model):
+    account = models.ForeignKey(InvestmentAccount, on_delete=models.CASCADE)
+    currency = models.CharField(max_length=3)  # e.g., "USD", "EUR"
+    balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+
+    class Meta:
+        unique_together = ('account', 'currency')
+
+    def __str__(self):
+        return f"{self.currency} {self.balance} ({self.account.name})"
+
+class AccountMovement(models.Model):
+    MOVEMENT_TYPE_CHOICES = [
+        ("DEPOSIT", "Deposit"),
+        ("WITHDRAWAL", "Withdrawal"),
+        ("TRANSFER_OUT", "Transfer Out"),
+        ("TRANSFER_IN", "Transfer In"),
+    ]
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    account = models.ForeignKey(InvestmentAccount, on_delete=models.CASCADE)
+    currency_holding = models.ForeignKey(CurrencyHolding, on_delete=models.CASCADE)
+    movement_type = models.CharField(max_length=12, choices=MOVEMENT_TYPE_CHOICES)  # Max length for "TRANSFER_OUT"
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    date = models.DateTimeField(auto_now_add=True)
+    description = models.TextField(blank=True, null=True)
+    related_movement = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.movement_type} of {self.amount} {self.currency_holding.currency} to {self.account.name}"

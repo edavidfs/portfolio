@@ -1,0 +1,75 @@
+{% extends 'portfolio/base.html' %}
+{% load static %} <!-- Assuming you might have static files for chart later -->
+
+{% block content %}
+    <h1>Dashboard</h1>
+    <p>Welcome to your portfolio manager.</p>
+
+    <section>
+        <h2>Investment Accounts</h2>
+        <p><a href="{% url 'portfolio:investmentaccount_list' %}">View and Manage Your Investment Accounts</a></p>
+    </section>
+
+    <div id="fundsEvolutionChartContainer" style="width: 80%; max-width: 600px; margin-top: 30px;">
+        <h3>Funds Evolution</h3>
+        <canvas id="fundsEvolutionChart"></canvas>
+    </div>
+
+    <!-- Chart.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Script to fetch data and render chart -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const ctx = document.getElementById('fundsEvolutionChart');
+            if (ctx) {
+                fetch("{% url 'portfolio:fund_evolution_data_api' %}") // Use Django's URL template tag
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (!data.labels || !data.datasets) {
+                            console.error('Received data is not in the expected format:', data);
+                            throw new Error('Invalid chart data format received from server.');
+                        }
+                        new Chart(ctx.getContext('2d'), {
+                            type: 'line',
+                            data: {
+                                labels: data.labels,
+                                datasets: data.datasets.map(dataset => ({
+                                    ...dataset,
+                                    // Data should already be numbers (floats) from the view
+                                    data: dataset.data,
+                                }))
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    y: {
+                                        beginAtZero: false // Set to false to allow chart to autoscale below zero if needed
+                                    }
+                                }
+                            }
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error fetching or rendering chart data:', error);
+                        const container = document.getElementById('fundsEvolutionChartContainer');
+                        if (container) {
+                            container.innerHTML = `<p>Could not load fund evolution data. ${error.message}</p>`;
+                        }
+                    });
+            } else {
+                console.error("Could not find chart canvas element.");
+                const container = document.getElementById('fundsEvolutionChartContainer');
+                if (container) {
+                    container.innerHTML = '<p>Chart canvas element not found.</p>';
+                }
+            }
+        });
+    </script>
+{% endblock %}

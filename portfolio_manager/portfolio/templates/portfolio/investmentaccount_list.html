@@ -1,0 +1,19 @@
+{% extends 'portfolio/base.html' %}
+
+{% block content %}
+    <h1>My Investment Accounts</h1>
+    <p><a href="{% url 'portfolio:investmentaccount_create' %}">Create New Account</a></p>
+
+    {% if accounts %}
+        <ul>
+            {% for account in accounts %}
+                <li>
+                    <a href="{% url 'portfolio:investmentaccount_detail' pk=account.pk %}">{{ account.name }}</a>
+                    (Base: {{ account.base_currency }})
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>You have no investment accounts yet.</p>
+    {% endif %}
+{% endblock %}
