@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Transfer Funds</title>
+</head>
+<body>
+    <header>
+        <h1>Transfer Funds Between Accounts</h1>
+        <nav>
+            <a href="{% url 'portfolio:investmentaccount_list' %}">Back to Accounts List</a>
+        </nav>
+    </header>
+
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li class="alert alert-{{ message.tags }}">{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    {% block content %}
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Transfer</button>
+    </form>
+    {% endblock %}
+
+    <footer>
+        <p><a href="{% url 'portfolio:investmentaccount_list' %}">Cancel</a></p>
+    </footer>
+</body>
+</html>

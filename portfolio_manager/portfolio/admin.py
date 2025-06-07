@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Asset, OptionContract, Transaction, Portfolio
+from .models import Asset, OptionContract, Transaction, Portfolio, InvestmentAccount, AccountTransaction
 
 # Register your models here.
 
@@ -39,3 +39,5 @@ class PortfolioAdmin(admin.ModelAdmin):
     filter_horizontal = ('assets',) # For easier management of ManyToManyField
 
 admin.site.register(Portfolio, PortfolioAdmin)
+admin.site.register(InvestmentAccount)
+admin.site.register(AccountTransaction)

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% if object %}Update Investment Account{% else %}Create Investment Account{% endif %}</title>
+</head>
+<body>
+    <header>
+        <h1>{% if object %}Update {{ object.name }}{% else %}Create New Investment Account{% endif %}</h1>
+        <nav>
+            <a href="{% url 'portfolio:investmentaccount_list' %}">Back to Accounts List</a>
+        </nav>
+    </header>
+
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li class="alert alert-{{ message.tags }}">{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    {% block content %}
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">{% if object %}Update{% else %}Create{% endif %} Account</button>
+    </form>
+    {% endblock %}
+
+    <footer>
+        <p><a href="{% url 'portfolio:investmentaccount_list' %}">Cancel</a></p>
+    </footer>
+</body>
+</html>

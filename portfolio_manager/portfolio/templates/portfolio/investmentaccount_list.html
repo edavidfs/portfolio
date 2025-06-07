@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Investment Accounts</title>
+</head>
+<body>
+    <header>
+        <h1>My Investment Accounts</h1>
+        <nav>
+            <a href="{% url 'portfolio:investmentaccount_create' %}">Create New Account</a> |
+            <a href="{% url 'portfolio:transfer_funds' %}">Make a Transfer</a> |
+            <a href="{% url 'portfolio:deposit_funds' %}">Deposit Funds</a> |
+            <a href="{% url 'portfolio:withdraw_funds' %}">Withdraw Funds</a>
+            {# Add other relevant global actions if any #}
+        </nav>
+    </header>
+
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li class="alert alert-{{ message.tags }}">{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    {% block content %}
+    <h2>Accounts</h2>
+    {% if accounts %}
+        <ul>
+            {% for account in accounts %}
+                <li>
+                    <strong><a href="{% url 'portfolio:investmentaccount_detail' pk=account.pk %}">{{ account.name }}</a></strong>
+                    ({{ account.currency }}) - Balance: {{ account.balance }}
+                    <br>
+                    <a href="{% url 'portfolio:investmentaccount_detail' pk=account.pk %}">View Details</a>
+                    {# Specific actions per account might be better placed on detail view or handled by generic deposit/withdraw forms #}
+                </li>
+            {% empty %}
+                <li>No investment accounts found. <a href="{% url 'portfolio:investmentaccount_create' %}">Create one?</a></li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No investment accounts yet.</p>
+        <a href="{% url 'portfolio:investmentaccount_create' %}">Create your first account</a>
+    {% endif %}
+    {% endblock %}
+
+    <footer>
+        <p><a href="#">Back to Dashboard (Placeholder)</a></p>
+    </footer>
+</body>
+</html>
