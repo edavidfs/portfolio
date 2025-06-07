@@ -12,7 +12,7 @@ from rest_framework import viewsets
 # from rest_framework import permissions # Will add later if needed
 
 from .forms import CSVUploadForm, InvestmentAccountForm, DepositWithdrawForm, TransferForm
-from .services import process_csv
+from .services import process_csv, get_account_balance_time_series
 from .models import Asset, OptionContract, Transaction, Portfolio, InvestmentAccount, AccountTransaction
 from .serializers import AssetSerializer, OptionContractSerializer, TransactionSerializer, PortfolioSerializer
 
@@ -72,7 +72,17 @@ from django.contrib.auth.decorators import login_required
 
 @login_required
 def dashboard_placeholder_view(request):
-    return render(request, 'portfolio/dashboard_placeholder.html')
+    user_accounts = InvestmentAccount.objects.filter(user=request.user)
+    user_transactions = AccountTransaction.objects.filter(
+        Q(from_account__in=user_accounts) | Q(to_account__in=user_accounts)
+    ).distinct().order_by('date', 'pk')
+
+    chart_data = get_account_balance_time_series(user_accounts, user_transactions)
+
+    context = {
+        'chart_data': chart_data
+    }
+    return render(request, 'portfolio/dashboard_placeholder.html', context)
 
 
 # Investment Account Views

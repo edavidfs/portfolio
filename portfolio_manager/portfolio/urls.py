@@ -1,7 +1,11 @@
-from django.urls import path, include # Import include
+from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from . import views # Keep this for upload_csv_view
-from .views import AssetViewSet, OptionContractViewSet, TransactionViewSet, PortfolioViewSet # Import ViewSets
+from . import views # General views like upload_csv_view, dashboard_placeholder_view
+from .views import (
+    AssetViewSet, OptionContractViewSet, TransactionViewSet, PortfolioViewSet, # DRF ViewSets
+    InvestmentAccountListView, InvestmentAccountCreateView, InvestmentAccountDetailView, # Investment Account CBVs
+    DepositView, WithdrawView, TransferView # Transaction CBVs
+)
 
 app_name = 'portfolio'
 
@@ -12,7 +16,19 @@ router.register(r'transactions', TransactionViewSet, basename='transaction')
 router.register(r'portfolios', PortfolioViewSet, basename='portfolio')
 
 urlpatterns = [
-    path('upload-csv/', views.upload_csv_view, name='upload_csv'), # Keep existing CSV upload
-    path('dashboard/', views.dashboard_placeholder_view, name='dashboard'), # New dashboard placeholder
-    path('api/', include(router.urls)), # Add DRF URLs under 'api/' prefix within the app
+    path('upload-csv/', views.upload_csv_view, name='upload_csv'),
+    path('dashboard/', views.dashboard_placeholder_view, name='dashboard'),
+
+    # Investment Accounts
+    path('accounts/', InvestmentAccountListView.as_view(), name='investmentaccount_list'),
+    path('accounts/create/', InvestmentAccountCreateView.as_view(), name='investmentaccount_create'),
+    path('accounts/<int:pk>/', InvestmentAccountDetailView.as_view(), name='investmentaccount_detail'),
+
+    # Transactions for Investment Accounts
+    path('accounts/deposit/', DepositView.as_view(), name='deposit_funds'), # Changed name for clarity
+    path('accounts/withdraw/', WithdrawView.as_view(), name='withdraw_funds'), # Changed name for clarity
+    path('accounts/transfer/', TransferView.as_view(), name='transfer_funds'), # Changed name for clarity
+
+    # API routes
+    path('api/', include(router.urls)),
 ]
