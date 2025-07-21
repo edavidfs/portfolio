@@ -17,7 +17,7 @@ Para usarla abre `index.html` en un navegador con conexión a Internet y selecci
 
 ### Formato del CSV de transferencias
 
-El archivo debe estar separado por `;` y contener como mínimo las columnas. Cualquier otra columna adicional se ignora automáticamente:
+El archivo debe estar separado por `,` y contener como mínimo las columnas. Cualquier otra columna adicional se ignora automáticamente. El campo `Date/Time` puede venir solo con fecha (`DD/MM/YYYY`) o con fecha y hora separados por `;` (`DD/MM/YYYY;HH:MM:SS`):
 
 - `CurrencyPrimary`: moneda de la transferencia.
 - `Date/Time`: fecha de la operación.

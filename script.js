@@ -17,7 +17,7 @@ tradesInput.addEventListener('change', event => handleCsv(event, data => {
 transfersInput.addEventListener('change', event => handleCsv(event, data => {
   transfers = sanitizeTransfers(data);
   drawCashChart(transfers);
-}, { delimiter: ';' }));
+}));
 
 dividendsInput.addEventListener('change', event => handleCsv(event, data => {
   dividends = data;
@@ -52,9 +52,25 @@ function sanitizeTrades(data) {
 function sanitizeTransfers(data) {
   return data.map(row => ({
     CurrencyPrimary: row.CurrencyPrimary,
-    DateTime: row['Date/Time'] || row.DateTime || row.Date,
+    DateTime: parseDateTime(row['Date/Time'] || row.DateTime || row.Date),
     Amount: parseFloat(row.Amount)
-  })).filter(r => r.CurrencyPrimary && !isNaN(r.Amount));
+  })).filter(r => r.CurrencyPrimary && r.DateTime && !isNaN(r.Amount));
+}
+
+function parseDateTime(value) {
+  if (!value) return null;
+  const clean = String(value).replace(';', ' ').trim();
+  const [datePart, timePart = ''] = clean.split(' ');
+  const [day, month, year] = datePart.split('/').map(Number);
+  if (!day || !month || !year) return null;
+  let hours = 0, minutes = 0, seconds = 0;
+  if (timePart) {
+    const [h = '0', m = '0', s = '0'] = timePart.split(':');
+    hours = parseInt(h, 10) || 0;
+    minutes = parseInt(m, 10) || 0;
+    seconds = parseInt(s, 10) || 0;
+  }
+  return new Date(year, month - 1, day, hours, minutes, seconds);
 }
 
 async function loadPositions() {
@@ -130,13 +146,11 @@ function drawChart(rows) {
 }
 
 function computeCashHistory(rows) {
-  const sorted = [...rows].sort(
-    (a, b) => new Date(a.DateTime) - new Date(b.DateTime)
-  );
+  const sorted = [...rows].sort((a, b) => a.DateTime - b.DateTime);
   const histories = {};
   sorted.forEach(r => {
     const currency = r.CurrencyPrimary;
-    const date = new Date(r.DateTime);
+    const date = r.DateTime;
     const amount = parseFloat(r.Amount) || 0;
     if (!histories[currency]) histories[currency] = [];
     const last = histories[currency].length
