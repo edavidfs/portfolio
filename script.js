@@ -10,12 +10,12 @@ let dividends = [];
 let optionsData = [];
 
 tradesInput.addEventListener('change', event => handleCsv(event, data => {
-  trades = data.filter(row => row.Ticker);
+  trades = sanitizeTrades(data);
   loadPositions();
 }));
 
 transfersInput.addEventListener('change', event => handleCsv(event, data => {
-  transfers = data.filter(row => row.CurrencyPrimary);
+  transfers = sanitizeTransfers(data);
   const cash = aggregateCash(transfers);
   drawCashChart(cash);
 }, { delimiter: ';' }));
@@ -42,6 +42,22 @@ function handleCsv(event, cb, opts = {}) {
   }, opts));
 }
 
+function sanitizeTrades(data) {
+  return data.map(row => ({
+    Ticker: row.Ticker || row.Symbol,
+    Quantity: parseFloat(row.Quantity ?? row.Cantidad ?? row.Shares ?? 0),
+    PurchasePrice: parseFloat(row.PurchasePrice ?? row.PrecioCompra ?? row.Price ?? 0)
+  })).filter(r => r.Ticker);
+}
+
+function sanitizeTransfers(data) {
+  return data.map(row => ({
+    CurrencyPrimary: row.CurrencyPrimary,
+    DateTime: row['Date/Time'] || row.DateTime || row.Date,
+    Amount: parseFloat(row.Amount)
+  })).filter(r => r.CurrencyPrimary && !isNaN(r.Amount));
+}
+
 async function loadPositions() {
   const rows = await Promise.all(trades.map(loadPosition));
   populateTable(rows);
@@ -50,8 +66,8 @@ async function loadPositions() {
 
 async function loadPosition(row) {
   const ticker = row.Ticker;
-  const quantity = row.Cantidad || row.Quantity || row.Shares || 0;
-  const purchase = row.PrecioCompra || row.PurchasePrice || row.Price || 0;
+  const quantity = row.Quantity || 0;
+  const purchase = row.PurchasePrice || 0;
   const current = await fetchPrice(ticker);
   const profit = (current - purchase) * quantity;
   const profitPct = purchase ? (profit / (purchase * quantity)) * 100 : 0;
