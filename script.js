@@ -16,8 +16,7 @@ tradesInput.addEventListener('change', event => handleCsv(event, data => {
 
 transfersInput.addEventListener('change', event => handleCsv(event, data => {
   transfers = sanitizeTransfers(data);
-  const cash = aggregateCash(transfers);
-  drawCashChart(cash);
+  drawCashChart(transfers);
 }, { delimiter: ';' }));
 
 dividendsInput.addEventListener('change', event => handleCsv(event, data => {
@@ -130,38 +129,53 @@ function drawChart(rows) {
   });
 }
 
-function aggregateCash(rows) {
-  const cash = {};
-  rows.forEach(r => {
+function computeCashHistory(rows) {
+  const sorted = [...rows].sort(
+    (a, b) => new Date(a.DateTime) - new Date(b.DateTime)
+  );
+  const histories = {};
+  sorted.forEach(r => {
     const currency = r.CurrencyPrimary;
+    const date = new Date(r.DateTime);
     const amount = parseFloat(r.Amount) || 0;
-    cash[currency] = (cash[currency] || 0) + amount;
+    if (!histories[currency]) histories[currency] = [];
+    const last = histories[currency].length
+      ? histories[currency][histories[currency].length - 1].y
+      : 0;
+    histories[currency].push({ x: date, y: last + amount });
   });
-  return cash;
+  return histories;
 }
 
-function drawCashChart(cash) {
-  const labels = Object.keys(cash);
-  const values = Object.values(cash);
+function drawCashChart(rows) {
+  const histories = computeCashHistory(rows);
+  const colors = [
+    'rgba(75, 192, 192, 1)',
+    'rgba(54, 162, 235, 1)',
+    'rgba(255, 99, 132, 1)',
+    'rgba(255, 206, 86, 1)'
+  ];
+  const datasets = Object.keys(histories).map((currency, i) => ({
+    label: currency,
+    data: histories[currency],
+    borderColor: colors[i % colors.length],
+    backgroundColor: colors[i % colors.length],
+    fill: false
+  }));
 
   if (chart) chart.destroy();
 
   const ctx = document.getElementById('portfolioChart').getContext('2d');
   chart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Efectivo por moneda',
-        data: values,
-        backgroundColor: 'rgba(75, 192, 192, 0.5)',
-        borderColor: 'rgba(75, 192, 192, 1)',
-        borderWidth: 1
-      }]
-    },
+    type: 'line',
+    data: { datasets },
     options: {
+      parsing: false,
       responsive: true,
       scales: {
+        x: {
+          type: 'time'
+        },
         y: {
           beginAtZero: true
         }
