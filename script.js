@@ -15,9 +15,10 @@ tradesInput.addEventListener('change', event => handleCsv(event, data => {
 }));
 
 transfersInput.addEventListener('change', event => handleCsv(event, data => {
-  transfers = data;
-  console.log('Transfers loaded', transfers);
-}));
+  transfers = data.filter(row => row.CurrencyPrimary);
+  const cash = aggregateCash(transfers);
+  drawCashChart(cash);
+}, { delimiter: ';' }));
 
 dividendsInput.addEventListener('change', event => handleCsv(event, data => {
   dividends = data;
@@ -29,16 +30,16 @@ optionsInput.addEventListener('change', event => handleCsv(event, data => {
   console.log('Options loaded', optionsData);
 }));
 
-function handleCsv(event, cb) {
+function handleCsv(event, cb, opts = {}) {
   const file = event.target.files[0];
   if (!file) return;
-  Papa.parse(file, {
+  Papa.parse(file, Object.assign({
     header: true,
     dynamicTyping: true,
     complete: function(results) {
       cb(results.data);
     }
-  });
+  }, opts));
 }
 
 async function loadPositions() {
@@ -99,6 +100,46 @@ function drawChart(rows) {
         data: values,
         backgroundColor: 'rgba(54, 162, 235, 0.5)',
         borderColor: 'rgba(54, 162, 235, 1)',
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
+function aggregateCash(rows) {
+  const cash = {};
+  rows.forEach(r => {
+    const currency = r.CurrencyPrimary;
+    const amount = parseFloat(r.Amount) || 0;
+    cash[currency] = (cash[currency] || 0) + amount;
+  });
+  return cash;
+}
+
+function drawCashChart(cash) {
+  const labels = Object.keys(cash);
+  const values = Object.values(cash);
+
+  if (chart) chart.destroy();
+
+  const ctx = document.getElementById('portfolioChart').getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: 'Efectivo por moneda',
+        data: values,
+        backgroundColor: 'rgba(75, 192, 192, 0.5)',
+        borderColor: 'rgba(75, 192, 192, 1)',
         borderWidth: 1
       }]
     },
