@@ -1,22 +1,51 @@
-const csvInput = document.getElementById('csvInput');
+const tradesInput = document.getElementById('tradesInput');
+const transfersInput = document.getElementById('transfersInput');
+const dividendsInput = document.getElementById('dividendsInput');
+const optionsInput = document.getElementById('optionsInput');
 const positionsBody = document.querySelector('#positionsTable tbody');
 let chart;
+let trades = [];
+let transfers = [];
+let dividends = [];
+let optionsData = [];
 
-csvInput.addEventListener('change', event => {
+tradesInput.addEventListener('change', event => handleCsv(event, data => {
+  trades = data.filter(row => row.Ticker);
+  loadPositions();
+}));
+
+transfersInput.addEventListener('change', event => handleCsv(event, data => {
+  transfers = data;
+  console.log('Transfers loaded', transfers);
+}));
+
+dividendsInput.addEventListener('change', event => handleCsv(event, data => {
+  dividends = data;
+  console.log('Dividends loaded', dividends);
+}));
+
+optionsInput.addEventListener('change', event => handleCsv(event, data => {
+  optionsData = data;
+  console.log('Options loaded', optionsData);
+}));
+
+function handleCsv(event, cb) {
   const file = event.target.files[0];
   if (!file) return;
-
   Papa.parse(file, {
     header: true,
     dynamicTyping: true,
-    complete: async function(results) {
-      const data = results.data.filter(row => row.Ticker);
-      const rows = await Promise.all(data.map(loadPosition));
-      populateTable(rows);
-      drawChart(rows);
+    complete: function(results) {
+      cb(results.data);
     }
   });
-});
+}
+
+async function loadPositions() {
+  const rows = await Promise.all(trades.map(loadPosition));
+  populateTable(rows);
+  drawChart(rows);
+}
 
 async function loadPosition(row) {
   const ticker = row.Ticker;
@@ -44,12 +73,12 @@ function populateTable(rows) {
   rows.forEach(r => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${r.ticker}</td>
-      <td>${r.quantity}</td>
-      <td>${r.purchase.toFixed(2)}</td>
-      <td>${r.current.toFixed(2)}</td>
-      <td>${r.profitPct.toFixed(2)}%</td>
-      <td>${r.profit.toFixed(2)}</td>`;
+      <td class="px-3 py-1">${r.ticker}</td>
+      <td class="px-3 py-1">${r.quantity}</td>
+      <td class="px-3 py-1">${r.purchase.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.current.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.profitPct.toFixed(2)}%</td>
+      <td class="px-3 py-1">${r.profit.toFixed(2)}</td>`;
     positionsBody.appendChild(tr);
   });
 }

@@ -1,10 +1,16 @@
 # Portfolio
 
-Aplicación web sencilla para gestionar un portfolio de inversión. Permite cargar un CSV de Interactive Broker o DeGiro con las posiciones actuales y muestra:
+Aplicación web sencilla para gestionar un portfolio de inversión. Se puede importar la información desde varios CSV independientes:
+
+- Transferencias a la cuenta.
+- Operaciones de compra/venta de acciones.
+- Dividendos recibidos.
+- Opciones negociadas.
+
+La interfaz está construida con **Tailwind CSS** y muestra:
 
 - Una barra superior con el nombre de la aplicación.
-- Una gráfica con el valor de cada acción en cartera.
-- Una tabla con los datos de cada acción: cantidad, precio de compra, precio actual, % de beneficio y beneficio.
-- Un botón para cargar el archivo CSV.
+- Una gráfica con el valor actual de cada acción.
+- Una tabla con los datos de cada posición: cantidad, precio de compra, precio actual, porcentaje y beneficio.
 
-Para usarla simplemente abre `index.html` en un navegador con conexión a internet, selecciona el CSV y se mostrarán los datos.
+Para usarla abre `index.html` en un navegador con conexión a Internet y selecciona los archivos CSV correspondientes. Por ahora solo el archivo de operaciones de acciones se usa para calcular las posiciones.
