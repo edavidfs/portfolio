@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portfolio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <nav class="bg-gray-800 text-white p-4 mb-6">
+    <h1 class="text-xl font-semibold">Portfolio</h1>
+  </nav>
+
+  <div class="container mx-auto px-4 mb-6">
+    <canvas id="portfolioChart" height="100"></canvas>
+  </div>
+  <div class="container mx-auto px-4 mb-6">
+    <table class="min-w-full divide-y divide-gray-200" id="positionsTable">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticker</th>
+          <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cantidad</th>
+          <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Compra</th>
+          <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Actual</th>
+          <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% Beneficio</th>
+          <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Beneficio</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200"></tbody>
+    </table>
+  </div>
+
+  <div class="container mx-auto px-4 space-y-4 mb-10">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="transfersInput">Importar transferencias</label>
+      <input type="file" id="transfersInput" accept=".csv" class="block w-full text-sm text-gray-700" />
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="tradesInput">Importar compra/venta de
+        acciones</label>
+      <input type="file" id="tradesInput" accept=".csv" class="block w-full text-sm text-gray-700" />
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="dividendsInput">Importar dividendos</label>
+      <input type="file" id="dividendsInput" accept=".csv" class="block w-full text-sm text-gray-700" />
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="optionsInput">Importar opciones</label>
+      <input type="file" id="optionsInput" accept=".csv" class="block w-full text-sm text-gray-700" />
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
