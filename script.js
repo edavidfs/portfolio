@@ -35,8 +35,10 @@ function handleCsv(event, cb, opts = {}) {
   Papa.parse(file, Object.assign({
     header: true,
     dynamicTyping: true,
+    quote: true,
     complete: function(results) {
       cb(results.data);
+      console.log(results)
     }
   }, opts));
 }
@@ -123,7 +125,7 @@ function drawChart(rows) {
 
   const ctx = document.getElementById('portfolioChart').getContext('2d');
   chart = new Chart(ctx, {
-    type: 'bar',
+    type: 'line',
     data: {
       labels: labels,
       datasets: [{
@@ -147,6 +149,7 @@ function drawChart(rows) {
 
 function computeCashHistory(rows) {
   const sorted = [...rows].sort((a, b) => a.DateTime - b.DateTime);
+  console.log(sorted)
   const histories = {};
   sorted.forEach(r => {
     const currency = r.CurrencyPrimary;
@@ -158,6 +161,7 @@ function computeCashHistory(rows) {
       : 0;
     histories[currency].push({ x: date, y: last + amount });
   });
+  console.log(histories)
   return histories;
 }
 
@@ -184,11 +188,13 @@ function drawCashChart(rows) {
     type: 'line',
     data: { datasets },
     options: {
-      parsing: false,
       responsive: true,
       scales: {
         x: {
-          type: 'time'
+          type: 'time',
+          time: {
+            unit: 'day'
+          },
         },
         y: {
           beginAtZero: true
