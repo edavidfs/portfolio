@@ -10,6 +10,7 @@ const tabPanels = document.querySelectorAll('.tab-panel');
 let chart;
 let trades = [];
 let transfers = [];
+let transferIds = new Set();
 let dividends = [];
 let optionsData = [];
 
@@ -29,7 +30,13 @@ tradesInput.addEventListener('change', event => handleCsv(event, data => {
 }));
 
 transfersInput.addEventListener('change', event => handleCsv(event, data => {
-  transfers = sanitizeTransfers(data);
+  const rows = sanitizeTransfers(data);
+  rows.forEach(r => {
+    if (!transferIds.has(r.TransactionID)) {
+      transferIds.add(r.TransactionID);
+      transfers.push(r);
+    }
+  });
   populateTransfersTable(transfers);
   updateCashChart();
 }));
@@ -46,17 +53,18 @@ optionsInput.addEventListener('change', event => handleCsv(event, data => {
 }));
 
 function handleCsv(event, cb, opts = {}) {
-  const file = event.target.files[0];
-  if (!file) return;
-  Papa.parse(file, Object.assign({
-    header: true,
-    dynamicTyping: true,
-    quote: true,
-    complete: function(results) {
-      cb(results.data);
-      console.log(results)
-    }
-  }, opts));
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  Promise.all(files.map(file => new Promise(resolve => {
+    Papa.parse(file, Object.assign({
+      header: true,
+      dynamicTyping: true,
+      quote: true,
+      complete: results => resolve(results.data)
+    }, opts));
+  }))).then(results => {
+    cb(results.flat());
+  });
 }
 
 function sanitizeTrades(data) {
@@ -69,10 +77,11 @@ function sanitizeTrades(data) {
 
 function sanitizeTransfers(data) {
   return data.map(row => ({
+    TransactionID: row.TransactionID || row.TransactionId || row.ID || row.Id,
     CurrencyPrimary: row.CurrencyPrimary,
     DateTime: parseDateTime(row['Date/Time'] || row.DateTime || row.Date),
     Amount: parseFloat(row.Amount)
-  })).filter(r => r.CurrencyPrimary && r.DateTime && !isNaN(r.Amount));
+  })).filter(r => r.TransactionID && r.CurrencyPrimary && r.DateTime && !isNaN(r.Amount));
 }
 
 function sanitizeDividends(data) {
@@ -143,7 +152,8 @@ function populateTable(rows) {
 
 function populateTransfersTable(rows) {
   transfersBody.innerHTML = '';
-  rows.forEach(r => {
+  const sorted = [...rows].sort((a, b) => a.DateTime - b.DateTime);
+  sorted.forEach(r => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="px-3 py-1">${r.DateTime.toLocaleDateString()}</td>
@@ -155,7 +165,8 @@ function populateTransfersTable(rows) {
 
 function populateDividendsTable(rows) {
   dividendsBody.innerHTML = '';
-  rows.forEach(r => {
+  const sorted = [...rows].sort((a, b) => a.DateTime - b.DateTime);
+  sorted.forEach(r => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="px-3 py-1">${r.DateTime.toLocaleDateString()}</td>

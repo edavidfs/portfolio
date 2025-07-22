@@ -14,7 +14,7 @@ La interfaz está construida con **Tailwind CSS** y muestra:
 - Un sistema de pestañas con tablas que detallan por separado transferencias, dividendos y más activos en el futuro.
 - Una tabla con los datos de cada posición: cantidad, precio de compra, precio actual, porcentaje y beneficio.
 
-Para usarla abre `index.html` en un navegador con conexión a Internet y selecciona los archivos CSV correspondientes. La gráfica de efectivo combina el historial de transferencias y los dividendos, mientras que la tabla de posiciones se alimenta de las operaciones de acciones.
+Para usarla abre `index.html` en un navegador con conexión a Internet y selecciona los archivos CSV correspondientes. Se pueden cargar varios ficheros de transferencias y solo se registrarán aquellas cuyo `TransactionID` sea único. La gráfica de efectivo combina el historial de transferencias y los dividendos, mientras que la tabla de posiciones se alimenta de las operaciones de acciones.
 
 ### Formato del CSV de transferencias
 
@@ -23,6 +23,7 @@ El archivo debe estar separado por `,` y contener como mínimo las columnas. Cua
 - `CurrencyPrimary`: moneda de la transferencia.
 - `Date/Time`: fecha de la operación.
 - `Amount`: cantidad transferida. Los valores positivos son ingresos y los negativos retiradas.
+- `TransactionID`: identificador único de la operación.
 
 ### Formato del CSV de operaciones de acciones
 
