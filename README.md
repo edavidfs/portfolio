@@ -10,10 +10,11 @@ Aplicación web sencilla para gestionar un portfolio de inversión. Se puede imp
 La interfaz está construida con **Tailwind CSS** y muestra:
 
 - Una barra superior con el nombre de la aplicación.
-- Una gráfica que muestra la evolución temporal del efectivo por moneda a partir del CSV de transferencias.
+- Una gráfica que muestra la evolución temporal del efectivo por moneda combinando transferencias y dividendos.
+- Un sistema de pestañas con tablas que detallan por separado transferencias, dividendos y más activos en el futuro.
 - Una tabla con los datos de cada posición: cantidad, precio de compra, precio actual, porcentaje y beneficio.
 
-Para usarla abre `index.html` en un navegador con conexión a Internet y selecciona los archivos CSV correspondientes. La gráfica se genera únicamente con el historial de transferencias y la tabla se alimenta de las operaciones de acciones.
+Para usarla abre `index.html` en un navegador con conexión a Internet y selecciona los archivos CSV correspondientes. La gráfica de efectivo combina el historial de transferencias y los dividendos, mientras que la tabla de posiciones se alimenta de las operaciones de acciones.
 
 ### Formato del CSV de transferencias
 

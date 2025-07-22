@@ -3,11 +3,25 @@ const transfersInput = document.getElementById('transfersInput');
 const dividendsInput = document.getElementById('dividendsInput');
 const optionsInput = document.getElementById('optionsInput');
 const positionsBody = document.querySelector('#positionsTable tbody');
+const transfersBody = document.querySelector('#transfersTable tbody');
+const dividendsBody = document.querySelector('#dividendsTable tbody');
+const tabButtons = document.querySelectorAll('#incomeTabs .tab-btn');
+const tabPanels = document.querySelectorAll('.tab-panel');
 let chart;
 let trades = [];
 let transfers = [];
 let dividends = [];
 let optionsData = [];
+
+tabButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.tab + 'Tab';
+    tabPanels.forEach(p => p.classList.add('hidden'));
+    tabButtons.forEach(b => b.classList.remove('border-indigo-600', 'text-indigo-600'));
+    document.getElementById(target).classList.remove('hidden');
+    btn.classList.add('border-indigo-600', 'text-indigo-600');
+  });
+});
 
 tradesInput.addEventListener('change', event => handleCsv(event, data => {
   trades = sanitizeTrades(data);
@@ -16,12 +30,14 @@ tradesInput.addEventListener('change', event => handleCsv(event, data => {
 
 transfersInput.addEventListener('change', event => handleCsv(event, data => {
   transfers = sanitizeTransfers(data);
-  drawCashChart(transfers);
+  populateTransfersTable(transfers);
+  updateCashChart();
 }));
 
 dividendsInput.addEventListener('change', event => handleCsv(event, data => {
-  dividends = data;
-  console.log('Dividends loaded', dividends);
+  dividends = sanitizeDividends(data);
+  populateDividendsTable(dividends);
+  updateCashChart();
 }));
 
 optionsInput.addEventListener('change', event => handleCsv(event, data => {
@@ -56,6 +72,14 @@ function sanitizeTransfers(data) {
     CurrencyPrimary: row.CurrencyPrimary,
     DateTime: parseDateTime(row['Date/Time'] || row.DateTime || row.Date),
     Amount: parseFloat(row.Amount)
+  })).filter(r => r.CurrencyPrimary && r.DateTime && !isNaN(r.Amount));
+}
+
+function sanitizeDividends(data) {
+  return data.map(row => ({
+    CurrencyPrimary: row.CurrencyPrimary || row.Currency,
+    DateTime: parseDateTime(row['Date/Time'] || row.Date || row.PaymentDate),
+    Amount: parseFloat(row.Amount ?? row.Net ?? row.NetAmount)
   })).filter(r => r.CurrencyPrimary && r.DateTime && !isNaN(r.Amount));
 }
 
@@ -117,6 +141,30 @@ function populateTable(rows) {
   });
 }
 
+function populateTransfersTable(rows) {
+  transfersBody.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-3 py-1">${r.DateTime.toLocaleDateString()}</td>
+      <td class="px-3 py-1">${r.Amount.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.CurrencyPrimary}</td>`;
+    transfersBody.appendChild(tr);
+  });
+}
+
+function populateDividendsTable(rows) {
+  dividendsBody.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-3 py-1">${r.DateTime.toLocaleDateString()}</td>
+      <td class="px-3 py-1">${r.Amount.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.CurrencyPrimary}</td>`;
+    dividendsBody.appendChild(tr);
+  });
+}
+
 function drawChart(rows) {
   const labels = rows.map(r => r.ticker);
   const values = rows.map(r => r.current * r.quantity);
@@ -163,6 +211,11 @@ function computeCashHistory(rows) {
   });
   console.log(histories)
   return histories;
+}
+
+function updateCashChart() {
+  const all = [...transfers, ...dividends];
+  drawCashChart(all);
 }
 
 function drawCashChart(rows) {
