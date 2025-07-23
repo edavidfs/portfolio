@@ -5,6 +5,8 @@ const optionsInput = document.getElementById('optionsInput');
 const positionsBody = document.querySelector('#positionsTable tbody');
 const transfersBody = document.querySelector('#transfersTable tbody');
 const dividendsBody = document.querySelector('#dividendsTable tbody');
+const dividendsDailyBody = document.querySelector('#dividendsDailyTable tbody');
+const dividendsAssetBody = document.querySelector('#dividendsAssetTable tbody');
 const tabButtons = document.querySelectorAll('#incomeTabs .tab-btn');
 const tabPanels = document.querySelectorAll('.tab-panel');
 let chart;
@@ -43,13 +45,16 @@ transfersInput.addEventListener('change', event => handleCsv(event, data => {
 
 dividendsInput.addEventListener('change', event => handleCsv(event, data => {
   dividends = sanitizeDividends(data);
+  const daily = aggregateDividendsByDay(dividends);
+  const byAsset = summarizeDividendsByAsset(dividends);
   populateDividendsTable(dividends);
+  populateDividendsDailyTable(daily);
+  populateDividendsAssetTable(byAsset);
   updateCashChart();
 }));
 
 optionsInput.addEventListener('change', event => handleCsv(event, data => {
   optionsData = data;
-  console.log('Options loaded', optionsData);
 }));
 
 function handleCsv(event, cb, opts = {}) {
@@ -86,10 +91,35 @@ function sanitizeTransfers(data) {
 
 function sanitizeDividends(data) {
   return data.map(row => ({
+    Ticker: row.Ticker || row.Symbol || row.Underlying || row.Asset,
     CurrencyPrimary: row.CurrencyPrimary || row.Currency,
     DateTime: parseDateTime(row['Date/Time'] || row.Date || row.PaymentDate),
     Amount: parseFloat(row.Amount ?? row.Net ?? row.NetAmount)
   })).filter(r => r.CurrencyPrimary && r.DateTime && !isNaN(r.Amount));
+}
+
+function aggregateDividendsByDay(rows) {
+  const map = {};
+  rows.forEach(r => {
+    const key = r.DateTime.toISOString().slice(0, 10) + r.CurrencyPrimary;
+    if (!map[key]) {
+      map[key] = { Date: r.DateTime.toISOString().slice(0, 10), Currency: r.CurrencyPrimary, Amount: 0 };
+    }
+    map[key].Amount += r.Amount;
+  });
+  return Object.values(map).sort((a, b) => new Date(a.Date) - new Date(b.Date));
+}
+
+function summarizeDividendsByAsset(rows) {
+  const map = {};
+  rows.forEach(r => {
+    if (!r.Ticker) return;
+    if (!map[r.Ticker]) {
+      map[r.Ticker] = { Ticker: r.Ticker, Currency: r.CurrencyPrimary, Amount: 0 };
+    }
+    map[r.Ticker].Amount += r.Amount;
+  });
+  return Object.values(map).sort((a, b) => a.Ticker.localeCompare(b.Ticker));
 }
 
 function parseDateTime(value) {
@@ -171,8 +201,33 @@ function populateDividendsTable(rows) {
     tr.innerHTML = `
       <td class="px-3 py-1">${r.DateTime.toLocaleDateString()}</td>
       <td class="px-3 py-1">${r.Amount.toFixed(2)}</td>
-      <td class="px-3 py-1">${r.CurrencyPrimary}</td>`;
+      <td class="px-3 py-1">${r.CurrencyPrimary}</td>
+      <td class="px-3 py-1">${r.Ticker || ''}</td>`;
     dividendsBody.appendChild(tr);
+  });
+}
+
+function populateDividendsDailyTable(rows) {
+  dividendsDailyBody.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-3 py-1">${new Date(r.Date).toLocaleDateString()}</td>
+      <td class="px-3 py-1">${r.Amount.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.Currency}</td>`;
+    dividendsDailyBody.appendChild(tr);
+  });
+}
+
+function populateDividendsAssetTable(rows) {
+  dividendsAssetBody.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-3 py-1">${r.Ticker}</td>
+      <td class="px-3 py-1">${r.Amount.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.Currency}</td>`;
+    dividendsAssetBody.appendChild(tr);
   });
 }
 
@@ -208,7 +263,6 @@ function drawChart(rows) {
 
 function computeCashHistory(rows) {
   const sorted = [...rows].sort((a, b) => a.DateTime - b.DateTime);
-  console.log(sorted)
   const histories = {};
   sorted.forEach(r => {
     const currency = r.CurrencyPrimary;
@@ -220,7 +274,6 @@ function computeCashHistory(rows) {
       : 0;
     histories[currency].push({ x: date, y: last + amount });
   });
-  console.log(histories)
   return histories;
 }
 

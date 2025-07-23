@@ -13,6 +13,7 @@ La interfaz está construida con **Tailwind CSS** y muestra:
 - Una gráfica que muestra la evolución temporal del efectivo por moneda combinando transferencias y dividendos.
 - Un sistema de pestañas con tablas que detallan por separado transferencias, dividendos y más activos en el futuro.
 - Una tabla con los datos de cada posición: cantidad, precio de compra, precio actual, porcentaje y beneficio.
+- En la pestaña de dividendos se muestran además los totales diarios y un resumen acumulado por activo.
 
 Para usarla abre `index.html` en un navegador con conexión a Internet y selecciona los archivos CSV correspondientes. Se pueden cargar varios ficheros de transferencias y solo se registrarán aquellas cuyo `TransactionID` sea único. La gráfica de efectivo combina el historial de transferencias y los dividendos, mientras que la tabla de posiciones se alimenta de las operaciones de acciones.
 
