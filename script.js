@@ -14,6 +14,7 @@ let trades = [];
 let transfers = [];
 let transferIds = new Set();
 let dividends = [];
+let dividendIds = new Set();
 let optionsData = [];
 
 tabButtons.forEach(btn => {
@@ -44,7 +45,13 @@ transfersInput.addEventListener('change', event => handleCsv(event, data => {
 }));
 
 dividendsInput.addEventListener('change', event => handleCsv(event, data => {
-  dividends = sanitizeDividends(data);
+  const rows = sanitizeDividends(data);
+  rows.forEach(r => {
+    if (!dividendIds.has(r.ActionID)) {
+      dividendIds.add(r.ActionID);
+      dividends.push(r);
+    }
+  });
   const daily = aggregateDividendsByDay(dividends);
   const byAsset = summarizeDividendsByAsset(dividends);
   populateDividendsTable(dividends);
@@ -90,12 +97,23 @@ function sanitizeTransfers(data) {
 }
 
 function sanitizeDividends(data) {
-  return data.map(row => ({
-    Ticker: row.Ticker || row.Symbol || row.Underlying || row.Asset,
-    CurrencyPrimary: row.CurrencyPrimary || row.Currency,
-    DateTime: parseDateTime(row['Date/Time'] || row.Date || row.PaymentDate),
-    Amount: parseFloat(row.Amount ?? row.Net ?? row.NetAmount)
-  })).filter(r => r.CurrencyPrimary && r.DateTime && !isNaN(r.Amount));
+  return data
+    .filter(row => String(row.Code || row.ActionCode || '').trim() === 'Po')
+    .map(row => {
+      const gross = parseFloat(row.GrossAmount);
+      const tax = parseFloat(row.Tax) || 0;
+      return {
+        ActionID: row.ActionID || row.ActionId || row.ID || row.Id,
+        Ticker: row.Ticker || row.Symbol || row.Underlying || row.Asset,
+        CurrencyPrimary: row.CurrencyPrimary || row.Currency,
+        DateTime: parseDateTime(row['Date/Time'] || row.Date || row.PaymentDate),
+        GrossAmount: isNaN(gross) ? 0 : gross,
+        Tax: tax,
+        IssuerCountryCode: row.IssuerCountryCode || row.Country || '',
+        Amount: (isNaN(gross) ? 0 : gross) + tax
+      };
+    })
+    .filter(r => r.ActionID && r.CurrencyPrimary && r.DateTime && !isNaN(r.GrossAmount));
 }
 
 function aggregateDividendsByDay(rows) {
@@ -202,7 +220,9 @@ function populateDividendsTable(rows) {
       <td class="px-3 py-1">${r.DateTime.toLocaleDateString()}</td>
       <td class="px-3 py-1">${r.Amount.toFixed(2)}</td>
       <td class="px-3 py-1">${r.CurrencyPrimary}</td>
-      <td class="px-3 py-1">${r.Ticker || ''}</td>`;
+      <td class="px-3 py-1">${r.Ticker || ''}</td>
+      <td class="px-3 py-1">${r.Tax.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.IssuerCountryCode}</td>`;
     dividendsBody.appendChild(tr);
   });
 }
