@@ -10,10 +10,13 @@ Aplicación web sencilla para gestionar un portfolio de inversión. Se puede imp
 La interfaz está construida con **Tailwind CSS** y muestra:
 
 - Una barra superior con el nombre de la aplicación.
-- Una gráfica que muestra la evolución temporal del efectivo por moneda a partir del CSV de transferencias.
+- Una gráfica que muestra la evolución temporal del efectivo por moneda combinando transferencias y dividendos.
+- Un sistema de pestañas con tablas que detallan por separado transferencias, dividendos y más activos en el futuro.
 - Una tabla con los datos de cada posición: cantidad, precio de compra, precio actual, porcentaje y beneficio.
+- En la pestaña de dividendos se muestran además los totales diarios y un resumen acumulado por activo.
+- Solo se registran dividendos cuyo `Code` sea `Po`. El campo `ActionID` evita duplicados, `GrossAmount` indica el importe bruto y `Tax` la retención asociada al país `IssuerCountryCode`.
 
-Para usarla abre `index.html` en un navegador con conexión a Internet y selecciona los archivos CSV correspondientes. La gráfica se genera únicamente con el historial de transferencias y la tabla se alimenta de las operaciones de acciones.
+Para usarla abre `index.html` en un navegador con conexión a Internet y selecciona los archivos CSV correspondientes. Se pueden cargar varios ficheros de transferencias y solo se registrarán aquellas cuyo `TransactionID` sea único. La gráfica de efectivo combina el historial de transferencias y los dividendos, mientras que la tabla de posiciones se alimenta de las operaciones de acciones.
 
 ### Formato del CSV de transferencias
 
@@ -22,7 +25,21 @@ El archivo debe estar separado por `,` y contener como mínimo las columnas. Cua
 - `CurrencyPrimary`: moneda de la transferencia.
 - `Date/Time`: fecha de la operación.
 - `Amount`: cantidad transferida. Los valores positivos son ingresos y los negativos retiradas.
+- `TransactionID`: identificador único de la operación.
 
 ### Formato del CSV de operaciones de acciones
 
 El archivo debe incluir al menos las columnas `Ticker`, `Quantity` y `PurchasePrice` (o nombres equivalentes). Cualquier otra columna se ignora.
+
+### Formato del CSV de dividendos
+
+Las filas de dividendos deben tener como mínimo los siguientes campos:
+
+- `ActionID`: identificador único de la operación.
+- `Code`: debe ser `Po` para que el dividendo se registre.
+- `Ticker`: activo sobre el que se reparte el dividendo.
+- `CurrencyPrimary`: moneda del pago.
+- `Date/Time` o `PaymentDate`: fecha de cobro.
+- `GrossAmount`: importe bruto (ingreso más impuesto).
+- `Tax`: retención aplicada.
+- `IssuerCountryCode`: país de origen del dividendo.

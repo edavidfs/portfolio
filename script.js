@@ -3,11 +3,29 @@ const transfersInput = document.getElementById('transfersInput');
 const dividendsInput = document.getElementById('dividendsInput');
 const optionsInput = document.getElementById('optionsInput');
 const positionsBody = document.querySelector('#positionsTable tbody');
+const transfersBody = document.querySelector('#transfersTable tbody');
+const dividendsBody = document.querySelector('#dividendsTable tbody');
+const dividendsDailyBody = document.querySelector('#dividendsDailyTable tbody');
+const dividendsAssetBody = document.querySelector('#dividendsAssetTable tbody');
+const tabButtons = document.querySelectorAll('#incomeTabs .tab-btn');
+const tabPanels = document.querySelectorAll('.tab-panel');
 let chart;
 let trades = [];
 let transfers = [];
+let transferIds = new Set();
 let dividends = [];
+let dividendIds = new Set();
 let optionsData = [];
+
+tabButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.tab + 'Tab';
+    tabPanels.forEach(p => p.classList.add('hidden'));
+    tabButtons.forEach(b => b.classList.remove('border-indigo-600', 'text-indigo-600'));
+    document.getElementById(target).classList.remove('hidden');
+    btn.classList.add('border-indigo-600', 'text-indigo-600');
+  });
+});
 
 tradesInput.addEventListener('change', event => handleCsv(event, data => {
   trades = sanitizeTrades(data);
@@ -15,32 +33,50 @@ tradesInput.addEventListener('change', event => handleCsv(event, data => {
 }));
 
 transfersInput.addEventListener('change', event => handleCsv(event, data => {
-  transfers = sanitizeTransfers(data);
-  drawCashChart(transfers);
+  const rows = sanitizeTransfers(data);
+  rows.forEach(r => {
+    if (!transferIds.has(r.TransactionID)) {
+      transferIds.add(r.TransactionID);
+      transfers.push(r);
+    }
+  });
+  populateTransfersTable(transfers);
+  updateCashChart();
 }));
 
 dividendsInput.addEventListener('change', event => handleCsv(event, data => {
-  dividends = data;
-  console.log('Dividends loaded', dividends);
+  const rows = sanitizeDividends(data);
+  rows.forEach(r => {
+    if (!dividendIds.has(r.ActionID)) {
+      dividendIds.add(r.ActionID);
+      dividends.push(r);
+    }
+  });
+  const daily = aggregateDividendsByDay(dividends);
+  const byAsset = summarizeDividendsByAsset(dividends);
+  populateDividendsTable(dividends);
+  populateDividendsDailyTable(daily);
+  populateDividendsAssetTable(byAsset);
+  updateCashChart();
 }));
 
 optionsInput.addEventListener('change', event => handleCsv(event, data => {
   optionsData = data;
-  console.log('Options loaded', optionsData);
 }));
 
 function handleCsv(event, cb, opts = {}) {
-  const file = event.target.files[0];
-  if (!file) return;
-  Papa.parse(file, Object.assign({
-    header: true,
-    dynamicTyping: true,
-    quote: true,
-    complete: function(results) {
-      cb(results.data);
-      console.log(results)
-    }
-  }, opts));
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  Promise.all(files.map(file => new Promise(resolve => {
+    Papa.parse(file, Object.assign({
+      header: true,
+      dynamicTyping: true,
+      quote: true,
+      complete: results => resolve(results.data)
+    }, opts));
+  }))).then(results => {
+    cb(results.flat());
+  });
 }
 
 function sanitizeTrades(data) {
@@ -53,10 +89,55 @@ function sanitizeTrades(data) {
 
 function sanitizeTransfers(data) {
   return data.map(row => ({
+    TransactionID: row.TransactionID || row.TransactionId || row.ID || row.Id,
     CurrencyPrimary: row.CurrencyPrimary,
     DateTime: parseDateTime(row['Date/Time'] || row.DateTime || row.Date),
     Amount: parseFloat(row.Amount)
-  })).filter(r => r.CurrencyPrimary && r.DateTime && !isNaN(r.Amount));
+  })).filter(r => r.TransactionID && r.CurrencyPrimary && r.DateTime && !isNaN(r.Amount));
+}
+
+function sanitizeDividends(data) {
+  return data
+    .filter(row => String(row.Code || row.ActionCode || '').trim() === 'Po')
+    .map(row => {
+      const gross = parseFloat(row.GrossAmount);
+      const tax = parseFloat(row.Tax) || 0;
+      return {
+        ActionID: row.ActionID || row.ActionId || row.ID || row.Id,
+        Ticker: row.Ticker || row.Symbol || row.Underlying || row.Asset,
+        CurrencyPrimary: row.CurrencyPrimary || row.Currency,
+        DateTime: parseDateTime(row['Date/Time'] || row.Date || row.PaymentDate),
+        GrossAmount: isNaN(gross) ? 0 : gross,
+        Tax: tax,
+        IssuerCountryCode: row.IssuerCountryCode || row.Country || '',
+        Amount: (isNaN(gross) ? 0 : gross) + tax
+      };
+    })
+    .filter(r => r.ActionID && r.CurrencyPrimary && r.DateTime && !isNaN(r.GrossAmount));
+}
+
+function aggregateDividendsByDay(rows) {
+  const map = {};
+  rows.forEach(r => {
+    const key = r.DateTime.toISOString().slice(0, 10) + r.CurrencyPrimary;
+    if (!map[key]) {
+      map[key] = { Date: r.DateTime.toISOString().slice(0, 10), Currency: r.CurrencyPrimary, Amount: 0 };
+    }
+    map[key].Amount += r.Amount;
+  });
+  return Object.values(map).sort((a, b) => new Date(a.Date) - new Date(b.Date));
+}
+
+function summarizeDividendsByAsset(rows) {
+  const map = {};
+  rows.forEach(r => {
+    if (!r.Ticker) return;
+    if (!map[r.Ticker]) {
+      map[r.Ticker] = { Ticker: r.Ticker, Currency: r.CurrencyPrimary, Amount: 0 };
+    }
+    map[r.Ticker].Amount += r.Amount;
+  });
+  return Object.values(map).sort((a, b) => a.Ticker.localeCompare(b.Ticker));
 }
 
 function parseDateTime(value) {
@@ -117,6 +198,59 @@ function populateTable(rows) {
   });
 }
 
+function populateTransfersTable(rows) {
+  transfersBody.innerHTML = '';
+  const sorted = [...rows].sort((a, b) => a.DateTime - b.DateTime);
+  sorted.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-3 py-1">${r.DateTime.toLocaleDateString()}</td>
+      <td class="px-3 py-1">${r.Amount.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.CurrencyPrimary}</td>`;
+    transfersBody.appendChild(tr);
+  });
+}
+
+function populateDividendsTable(rows) {
+  dividendsBody.innerHTML = '';
+  const sorted = [...rows].sort((a, b) => a.DateTime - b.DateTime);
+  sorted.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-3 py-1">${r.DateTime.toLocaleDateString()}</td>
+      <td class="px-3 py-1">${r.Amount.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.CurrencyPrimary}</td>
+      <td class="px-3 py-1">${r.Ticker || ''}</td>
+      <td class="px-3 py-1">${r.Tax.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.IssuerCountryCode}</td>`;
+    dividendsBody.appendChild(tr);
+  });
+}
+
+function populateDividendsDailyTable(rows) {
+  dividendsDailyBody.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-3 py-1">${new Date(r.Date).toLocaleDateString()}</td>
+      <td class="px-3 py-1">${r.Amount.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.Currency}</td>`;
+    dividendsDailyBody.appendChild(tr);
+  });
+}
+
+function populateDividendsAssetTable(rows) {
+  dividendsAssetBody.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-3 py-1">${r.Ticker}</td>
+      <td class="px-3 py-1">${r.Amount.toFixed(2)}</td>
+      <td class="px-3 py-1">${r.Currency}</td>`;
+    dividendsAssetBody.appendChild(tr);
+  });
+}
+
 function drawChart(rows) {
   const labels = rows.map(r => r.ticker);
   const values = rows.map(r => r.current * r.quantity);
@@ -149,7 +283,6 @@ function drawChart(rows) {
 
 function computeCashHistory(rows) {
   const sorted = [...rows].sort((a, b) => a.DateTime - b.DateTime);
-  console.log(sorted)
   const histories = {};
   sorted.forEach(r => {
     const currency = r.CurrencyPrimary;
@@ -161,8 +294,12 @@ function computeCashHistory(rows) {
       : 0;
     histories[currency].push({ x: date, y: last + amount });
   });
-  console.log(histories)
   return histories;
+}
+
+function updateCashChart() {
+  const all = [...transfers, ...dividends];
+  drawCashChart(all);
 }
 
 function drawCashChart(rows) {
