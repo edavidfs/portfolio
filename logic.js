@@ -1,3 +1,4 @@
+// logic.js - main application logic using persistence layer
 const tradesInput = document.getElementById('tradesInput');
 const transfersInput = document.getElementById('transfersInput');
 const dividendsInput = document.getElementById('dividendsInput');
@@ -17,52 +18,68 @@ let dividends = [];
 let dividendIds = new Set();
 let optionsData = [];
 
-tabButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    const target = btn.dataset.tab + 'Tab';
-    tabPanels.forEach(p => p.classList.add('hidden'));
-    tabButtons.forEach(b => b.classList.remove('border-indigo-600', 'text-indigo-600'));
-    document.getElementById(target).classList.remove('hidden');
-    btn.classList.add('border-indigo-600', 'text-indigo-600');
-  });
-});
+async function initApp() {
+  await db.initDb();
+  trades = await db.getTrades();
+  transfers = await db.getTransfers();
+  dividends = await db.getDividends();
+  transferIds = new Set(transfers.map(t => t.TransactionID));
+  dividendIds = new Set(dividends.map(d => d.ActionID));
 
-tradesInput.addEventListener('change', event => handleCsv(event, data => {
-  trades = sanitizeTrades(data);
-  loadPositions();
-}));
-
-transfersInput.addEventListener('change', event => handleCsv(event, data => {
-  const rows = sanitizeTransfers(data);
-  rows.forEach(r => {
-    if (!transferIds.has(r.TransactionID)) {
-      transferIds.add(r.TransactionID);
-      transfers.push(r);
-    }
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.tab + 'Tab';
+      tabPanels.forEach(p => p.classList.add('hidden'));
+      tabButtons.forEach(b => b.classList.remove('border-indigo-600', 'text-indigo-600'));
+      document.getElementById(target).classList.remove('hidden');
+      btn.classList.add('border-indigo-600', 'text-indigo-600');
+    });
   });
+
+  tradesInput.addEventListener('change', event => handleCsv(event, async data => {
+    const rows = sanitizeTrades(data);
+    trades = rows;
+    await db.addTrades(rows);
+    loadPositions();
+  }));
+
+  transfersInput.addEventListener('change', event => handleCsv(event, async data => {
+    const rows = sanitizeTransfers(data).filter(r => !transferIds.has(r.TransactionID));
+    rows.forEach(r => transferIds.add(r.TransactionID));
+    transfers.push(...rows);
+    await db.addTransfers(rows);
+    populateTransfersTable(transfers);
+    updateCashChart();
+  }));
+
+  dividendsInput.addEventListener('change', event => handleCsv(event, async data => {
+    const rows = sanitizeDividends(data).filter(r => !dividendIds.has(r.ActionID));
+    rows.forEach(r => dividendIds.add(r.ActionID));
+    dividends.push(...rows);
+    await db.addDividends(rows);
+    const daily = aggregateDividendsByDay(dividends);
+    const byAsset = summarizeDividendsByAsset(dividends);
+    populateDividendsTable(dividends);
+    populateDividendsDailyTable(daily);
+    populateDividendsAssetTable(byAsset);
+    updateCashChart();
+  }));
+
+  optionsInput.addEventListener('change', event => handleCsv(event, data => {
+    optionsData = data;
+  }));
+
   populateTransfersTable(transfers);
-  updateCashChart();
-}));
-
-dividendsInput.addEventListener('change', event => handleCsv(event, data => {
-  const rows = sanitizeDividends(data);
-  rows.forEach(r => {
-    if (!dividendIds.has(r.ActionID)) {
-      dividendIds.add(r.ActionID);
-      dividends.push(r);
-    }
-  });
   const daily = aggregateDividendsByDay(dividends);
   const byAsset = summarizeDividendsByAsset(dividends);
   populateDividendsTable(dividends);
   populateDividendsDailyTable(daily);
   populateDividendsAssetTable(byAsset);
+  loadPositions();
   updateCashChart();
-}));
+}
 
-optionsInput.addEventListener('change', event => handleCsv(event, data => {
-  optionsData = data;
-}));
+document.addEventListener('DOMContentLoaded', initApp);
 
 function handleCsv(event, cb, opts = {}) {
   const files = Array.from(event.target.files || []);
@@ -340,3 +357,4 @@ function drawCashChart(rows) {
     }
   });
 }
+
