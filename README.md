@@ -7,6 +7,8 @@ Aplicación web sencilla para gestionar un portfolio de inversión. Se puede imp
 - Dividendos recibidos.
 - Opciones negociadas.
 
+Los datos importados se almacenan localmente en el navegador mediante una base de datos SQLite gestionada con **sql.js**, por lo que no es necesario volver a cargar los CSV cada vez que se abre la página. El código JavaScript se divide en dos archivos: `db.js` con las funciones de base de datos y `script.js` con el resto de la lógica.
+
 La interfaz está construida con **Tailwind CSS** y muestra:
 
 - Una barra superior con el nombre de la aplicación.
