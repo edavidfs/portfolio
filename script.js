@@ -8,25 +8,38 @@ let trades = [];
 let transfers = [];
 let dividends = [];
 let optionsData = [];
+window.addEventListener('DOMContentLoaded', setup);
+
+async function setup() {
+  await db.initDatabase();
+  trades = db.loadTrades();
+  if (trades.length) {
+    loadPositions();
+  }
+  transfers = db.loadTransfers();
+  if (transfers.length) {
+    drawCashChart(transfers);
+  }
+}
 
 tradesInput.addEventListener('change', event => handleCsv(event, data => {
   trades = sanitizeTrades(data);
+  db.storeTrades(trades);
   loadPositions();
 }));
 
 transfersInput.addEventListener('change', event => handleCsv(event, data => {
   transfers = sanitizeTransfers(data);
+  db.storeTransfers(transfers);
   drawCashChart(transfers);
 }));
 
 dividendsInput.addEventListener('change', event => handleCsv(event, data => {
   dividends = data;
-  console.log('Dividends loaded', dividends);
 }));
 
 optionsInput.addEventListener('change', event => handleCsv(event, data => {
   optionsData = data;
-  console.log('Options loaded', optionsData);
 }));
 
 function handleCsv(event, cb, opts = {}) {
@@ -38,7 +51,6 @@ function handleCsv(event, cb, opts = {}) {
     quote: true,
     complete: function(results) {
       cb(results.data);
-      console.log(results)
     }
   }, opts));
 }
@@ -149,7 +161,6 @@ function drawChart(rows) {
 
 function computeCashHistory(rows) {
   const sorted = [...rows].sort((a, b) => a.DateTime - b.DateTime);
-  console.log(sorted)
   const histories = {};
   sorted.forEach(r => {
     const currency = r.CurrencyPrimary;
@@ -161,7 +172,6 @@ function computeCashHistory(rows) {
       : 0;
     histories[currency].push({ x: date, y: last + amount });
   });
-  console.log(histories)
   return histories;
 }
 
