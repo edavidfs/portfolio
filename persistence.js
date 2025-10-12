@@ -3,6 +3,7 @@ let sqlReady;
 let db;
 
 async function initDb() {
+  console.log("iniciando base de datos");
   if (db) return db;
   if (!sqlReady) {
     sqlReady = initSqlJs({
@@ -16,11 +17,12 @@ async function initDb() {
     db = new SQL.Database(binary);
   } else {
     db = new SQL.Database();
-    db.run(`CREATE TABLE IF NOT EXISTS trades (ticker TEXT, quantity REAL, purchase REAL);
+    db.run(`CREATE TABLE IF NOT EXISTS trades (id TEXT PRIMARY KEY, ticker TEXT, quantity REAL, purchase REAL, date INTEGER, commission REAL);
             CREATE TABLE IF NOT EXISTS transfers (id TEXT PRIMARY KEY, date INTEGER, amount REAL, currency TEXT);
             CREATE TABLE IF NOT EXISTS dividends (id TEXT PRIMARY KEY, date INTEGER, amount REAL, currency TEXT, ticker TEXT, tax REAL, country TEXT);`);
     saveDb();
   }
+  ensureSchema();
   return db;
 }
 
@@ -34,9 +36,26 @@ function saveDb() {
 async function addTrades(rows) {
   if (!rows.length) return;
   const db = await initDb();
-  const stmt = db.prepare('INSERT INTO trades VALUES (?,?,?)');
+  // Deduplicación: prioriza ID cuando existe, si no por (ticker, quantity, purchase)
+  const existing = db.exec('SELECT id, ticker, quantity, purchase FROM trades');
+  const idSet = new Set(existing.length ? existing[0].values.map(v => v[0]) : []);
+  const keySet = new Set(existing.length ? existing[0].values.map(v => `${v[1]}|${v[2]}|${v[3]}`) : []);
+  const toInsert = rows.filter(r => {
+    const id = r.TradeID || r.id;
+    if (id) return !idSet.has(String(id));
+    return !keySet.has(`${r.Ticker}|${r.Quantity}|${r.PurchasePrice}`);
+  });
+  if (!toInsert.length) return;
+  const stmt = db.prepare('INSERT OR IGNORE INTO trades (id, ticker, quantity, purchase, date, commission) VALUES (?,?,?,?,?,?)');
   db.run('BEGIN TRANSACTION');
-  rows.forEach(r => stmt.run([r.Ticker, r.Quantity, r.PurchasePrice]));
+  toInsert.forEach(r => stmt.run([
+    String(r.TradeID || r.id || `legacy:${r.Ticker}|${r.Quantity}|${r.PurchasePrice}`),
+    r.Ticker,
+    r.Quantity,
+    r.PurchasePrice,
+    r.DateTime instanceof Date ? r.DateTime.getTime() : null,
+    typeof r.Commission === 'number' ? r.Commission : null
+  ]));
   db.run('COMMIT');
   stmt.free();
   saveDb();
@@ -47,7 +66,7 @@ async function addTransfers(rows) {
   const db = await initDb();
   const stmt = db.prepare('INSERT OR IGNORE INTO transfers VALUES (?,?,?,?)');
   db.run('BEGIN TRANSACTION');
-  rows.forEach(r => stmt.run([r.TransactionID, r.DateTime.getTime(), r.Amount, r.CurrencyPrimary]));
+  rows.forEach(r => stmt.run([String(r.TransactionID), r.DateTime.getTime(), r.Amount, r.CurrencyPrimary]));
   db.run('COMMIT');
   stmt.free();
   saveDb();
@@ -58,7 +77,7 @@ async function addDividends(rows) {
   const db = await initDb();
   const stmt = db.prepare('INSERT OR IGNORE INTO dividends VALUES (?,?,?,?,?,?,?)');
   db.run('BEGIN TRANSACTION');
-  rows.forEach(r => stmt.run([r.ActionID, r.DateTime.getTime(), r.Amount, r.CurrencyPrimary, r.Ticker || '', r.Tax, r.IssuerCountryCode]));
+  rows.forEach(r => stmt.run([String(r.ActionID), r.DateTime.getTime(), r.Amount, r.CurrencyPrimary, r.Ticker || '', r.Tax, r.IssuerCountryCode]));
   db.run('COMMIT');
   stmt.free();
   saveDb();
@@ -66,9 +85,16 @@ async function addDividends(rows) {
 
 async function getTrades() {
   const db = await initDb();
-  const res = db.exec('SELECT ticker AS Ticker, quantity AS Quantity, purchase AS PurchasePrice FROM trades');
+  const res = db.exec('SELECT id, ticker AS Ticker, quantity AS Quantity, purchase AS PurchasePrice, date AS Date, commission AS Commission FROM trades');
   if (!res.length) return [];
-  return res[0].values.map(row => ({ Ticker: row[0], Quantity: row[1], PurchasePrice: row[2] }));
+  return res[0].values.map(row => ({
+    TradeID: row[0],
+    Ticker: row[1],
+    Quantity: row[2],
+    PurchasePrice: row[3],
+    DateTime: row[4] ? new Date(row[4]) : null,
+    Commission: row[5] ?? null
+  }));
 }
 
 async function getTransfers() {
@@ -98,4 +124,37 @@ async function getDividends() {
   }));
 }
 
-window.db = { initDb, addTrades, addTransfers, addDividends, getTrades, getTransfers, getDividends };
+function resetDb() {
+  localStorage.removeItem('portfolioDB');
+  try {
+    if (db && typeof db.close === 'function') db.close();
+  } catch (_) {}
+  db = null;
+}
+
+window.db = { initDb, addTrades, addTransfers, addDividends, getTrades, getTransfers, getDividends, resetDb };
+
+function ensureSchema() {
+  try {
+    const info = db.exec("PRAGMA table_info(trades)");
+    const cols = info.length ? info[0].values.map(v => v[1]) : [];
+    if (cols.length && cols.indexOf('id') === -1) {
+      db.run('BEGIN TRANSACTION');
+      db.run('CREATE TABLE trades_new (id TEXT PRIMARY KEY, ticker TEXT, quantity REAL, purchase REAL, date INTEGER, commission REAL)');
+      db.run("INSERT INTO trades_new (id, ticker, quantity, purchase, date, commission) SELECT 'legacy:' || ticker || '|' || quantity || '|' || purchase, ticker, quantity, purchase, NULL, NULL FROM trades");
+      db.run('DROP TABLE trades');
+      db.run('ALTER TABLE trades_new RENAME TO trades');
+      db.run('COMMIT');
+      saveDb();
+    }
+    // Añadir columnas nuevas si faltan (date, commission)
+    if (cols.indexOf('date') === -1) {
+      db.run("ALTER TABLE trades ADD COLUMN date INTEGER");
+    }
+    if (cols.indexOf('commission') === -1) {
+      db.run("ALTER TABLE trades ADD COLUMN commission REAL");
+    }
+  } catch (e) {
+    // noop
+  }
+}
