@@ -1,0 +1,27 @@
+import { Component, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { ToastService } from '../services/toast.service';
+
+@Component({
+  selector: 'app-toasts',
+  standalone: true,
+  imports: [CommonModule],
+  template: `
+    <div class="fixed top-4 right-4 z-50 space-y-2" aria-live="polite" aria-atomic="true">
+      <div *ngFor="let t of toast.toasts()" class="flex items-center gap-3 px-3 py-2 rounded shadow text-sm text-white"
+           [ngClass]="{
+            'bg-green-600': t.type==='success',
+            'bg-blue-600': t.type==='info',
+            'bg-yellow-600': t.type==='warning',
+            'bg-red-600': t.type==='error'
+           }">
+        <span class="mt-0.5">{{ t.message }}</span>
+        <button class="ml-auto text-xs opacity-80 hover:opacity-100" aria-label="Cerrar" (click)="toast.dismiss(t.id)">✕</button>
+      </div>
+    </div>
+  `
+})
+export class ToastsComponent {
+  toast = inject(ToastService);
+}
+

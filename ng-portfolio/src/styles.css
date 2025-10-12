@@ -1,0 +1,4 @@
+/* Estilos globales opcionales */
+html, body { height: 100%; }
+body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system; }
+

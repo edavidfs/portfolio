@@ -8,7 +8,7 @@ bazel-out/
 node_modules/
 
 # --- Cachés Angular
-.angular/cache/
+**/.angular/cache/
 
 # --- Cobertura de tests
 coverage/
