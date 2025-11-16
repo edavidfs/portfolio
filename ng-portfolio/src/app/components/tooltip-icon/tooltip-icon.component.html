@@ -1,0 +1,13 @@
+<span class="relative inline-flex items-center">
+  <button type="button"
+          (click)="toggle($event)"
+          class="inline-flex items-center justify-center w-4 h-4 text-xs rounded-full border border-gray-400 text-gray-600 hover:bg-gray-100"
+          aria-label="Mostrar ayuda">
+    ?
+  </button>
+  <span *ngIf="open()"
+        class="absolute left-5 top-1 z-10 max-w-xs text-xs bg-black text-white px-2 py-1 rounded shadow">
+    {{ text }}
+  </span>
+</span>
+

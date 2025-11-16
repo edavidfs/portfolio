@@ -1,47 +1,19 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { DataService, TransferRow, DividendRow } from '../services/data.service';
+import { DataService, TransferRow, DividendRow } from '../../services/data.service';
 
 @Component({
   selector: 'app-cash-view',
   standalone: true,
   imports: [CommonModule],
-  template: `
-  <div class="container mx-auto">
-    <canvas id="cashChart" height="70"></canvas>
-  </div>
-  <div class="container mx-auto mt-6">
-    <h3 class="text-sm font-medium text-gray-700 mb-2">Evolución de primas (cobradas/pagadas)</h3>
-    <canvas id="optionsPremiumChart" height="60"></canvas>
-  </div>
-  <div class="container mx-auto">
-    <h3 class="text-sm font-medium text-gray-700 mb-2">Operaciones de efectivo (Transferencias y FX)</h3>
-    <table class="min-w-full divide-y divide-gray-200">
-      <thead class="bg-gray-50">
-        <tr>
-          <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-          <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Importe</th>
-          <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Moneda</th>
-          <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-        </tr>
-      </thead>
-      <tbody class="bg-white divide-y divide-gray-200">
-        <tr *ngFor="let r of rows">
-          <td class="px-3 py-1">{{ r.DateTime | date:'shortDate' }}</td>
-          <td class="px-3 py-1">{{ r.Amount | number:'1.2-2' }}</td>
-          <td class="px-3 py-1">{{ r.CurrencyPrimary }}</td>
-          <td class="px-3 py-1">{{ getType(r) }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-  `
+  templateUrl: './cash-view.component.html'
 })
 export class CashViewComponent implements OnInit {
   private data = inject(DataService);
   rows: TransferRow[] = [];
   private chart: any;
   private premChart: any;
+  private yearBoundaryPlugin = this.buildYearBoundaryPlugin();
 
   ngOnInit(){
     this.refresh();
@@ -85,7 +57,7 @@ export class CashViewComponent implements OnInit {
     if (!datasets.length) return;
     const canvas:any = document.getElementById('cashChart'); if (!canvas) return; const ctx = canvas.getContext('2d');
     if (this.chart) this.chart.destroy();
-    this.chart = new (window as any).Chart(ctx, { type: 'line', data: { datasets }, options: { responsive: true, scales: { x: { type: 'time', time: { unit: 'day' } }, y: { beginAtZero: true } } } });
+    this.chart = new (window as any).Chart(ctx, { type: 'line', data: { datasets }, options: { responsive: true, scales: { x: { type: 'time', time: { unit: 'day' } }, y: { beginAtZero: true } } }, plugins: [this.yearBoundaryPlugin] });
   }
 
   private drawPremiumChart(rows:TransferRow[]){
@@ -108,7 +80,37 @@ export class CashViewComponent implements OnInit {
         { label: 'Cobradas (acum.)', data: received, borderColor: 'rgba(34,197,94,1)', backgroundColor: 'rgba(34,197,94,0.3)', fill: false },
         { label: 'Pagadas (acum.)', data: paid, borderColor: 'rgba(239,68,68,1)', backgroundColor: 'rgba(239,68,68,0.3)', fill: false }
       ]},
-      options: { responsive: true, scales: { x: { type: 'time', time: { unit: 'day' } }, y: { beginAtZero: true } } }
+      options: { responsive: true, scales: { x: { type: 'time', time: { unit: 'day' } }, y: { beginAtZero: true } } },
+      plugins: [this.yearBoundaryPlugin]
     });
+  }
+
+  private buildYearBoundaryPlugin(){
+    return {
+      id: 'yearBoundaries',
+      afterDatasetsDraw: (chart:any) => {
+        const xScale = chart.scales?.x;
+        const area = chart.chartArea;
+        if (!xScale || !area) return;
+        const min = xScale.min;
+        const max = xScale.max;
+        if (min == null || max == null) return;
+        const ctx = chart.ctx;
+        const startYear = new Date(min).getFullYear();
+        let d = new Date(startYear + 1, 0, 1, 0, 0, 0, 0);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+        ctx.setLineDash([4, 4]);
+        while (d.getTime() < max) {
+          const x = xScale.getPixelForValue(d.getTime());
+          ctx.beginPath();
+          ctx.moveTo(x, area.top);
+          ctx.lineTo(x, area.bottom);
+          ctx.stroke();
+          d = new Date(d.getFullYear() + 1, 0, 1, 0, 0, 0, 0);
+        }
+        ctx.restore();
+      }
+    };
   }
 }

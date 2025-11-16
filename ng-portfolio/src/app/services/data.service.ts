@@ -22,6 +22,11 @@ export interface OptionRow {
   currencyPrimary: string;
   DateTime: Date;
   execId?: string;
+  expiry?: Date;
+  optType?: 'C'|'P';
+  strike?: number;
+  calcMultiplier?: number;
+  notional?: number;
 }
 
 @Injectable({providedIn: 'root'})
@@ -36,8 +41,21 @@ export class DataService {
   private transferIds = new Set<string>();
   private dividendIds = new Set<string>();
   private priceErrorShown = new Set<string>();
+  private alphaApiKey: string | null = null;
+  private finnhubApiKey: string | null = null;
+  private priceProvider: 'alpha' | 'finnhub' = 'alpha';
+  private finnhubSymbolMap: Record<string, string> = {};
 
-  constructor(private toast: ToastService) {}
+  constructor(private toast: ToastService) {
+    try {
+      this.alphaApiKey = localStorage.getItem('alphaVantageKey');
+      this.finnhubApiKey = localStorage.getItem('finnhubKey');
+      const prov = localStorage.getItem('priceProvider');
+      if (prov === 'finnhub' || prov === 'alpha') this.priceProvider = prov;
+      const map = localStorage.getItem('finnhubSymbolMap');
+      if (map) this.finnhubSymbolMap = JSON.parse(map);
+    } catch { }
+  }
 
   async init(){
     await this.initDb();
@@ -117,9 +135,10 @@ export class DataService {
       }
 
       if (assetClass === 'OPT') {
-        // Prima de opciones: importe = qty (contratos) * tradePrice * 100 (multiplicador) + comisión (si misma divisa)
+        // Prima de opciones: importe = qty (contratos) * tradePrice * multiplier + comisión (si misma divisa)
         const side = String(row['Buy/Sell'] || row.Side || row.BS || '').trim().toUpperCase();
-        const multiplier = 100;
+        const parsed = this.parseOccSymbol(String(symbol||''));
+        const multiplier = parsed.calcMultiplier || 100;
         const gross = (Math.abs(qty) * price * multiplier);
         let flow = 0;
         if (side === 'SELL') flow = +gross; // al vender opciones, se cobra prima
@@ -134,8 +153,9 @@ export class DataService {
         const optId = row.IVExecID || row.IBExecID || row.ExecID || row.ExecutionID || row.ExecutionId || '';
         const txId = optId ? `OPT:${optId}` : `OPT:${symbol}:${dt.getTime()}:${Math.abs(qty)}:${price}`;
         cash.push({ TransactionID: txId, DateTime: dt, Amount: amount, CurrencyPrimary: c });
-        const underlying = (row.Underlying || this.extractUnderlyingFromSymbol(symbol) || '').toString().toUpperCase();
+        const underlying = (row.Underlying || parsed.underlying || this.extractUnderlyingFromSymbol(symbol) || '').toString().toUpperCase();
         const contracts = Math.abs(qty);
+        const notional = (parsed.strike || 0) * (parsed.calcMultiplier || multiplier) * contracts;
         options.push({
           OptionID: txId,
           underlying,
@@ -149,7 +169,12 @@ export class DataService {
           commissionCurrency: commissionCurrency || undefined,
           currencyPrimary: c,
           DateTime: dt,
-          execId: optId || undefined
+          execId: optId || undefined,
+          expiry: parsed.expiry || undefined,
+          optType: parsed.optType as any,
+          strike: parsed.strike,
+          calcMultiplier: parsed.calcMultiplier,
+          notional
         });
         return;
       }
@@ -321,18 +346,89 @@ export class DataService {
     return map;
   }
 
-  async fetchPricesBatch(tickers:string[]){ const entries = await Promise.all(tickers.map(async t => [t, await this.fetchPrice(t)] as const)); return Object.fromEntries(entries as any); }
+  computeOptionStatsByUnderlying(opts: OptionRow[]){
+    const map: Record<string, { putsContracts:number; callsContracts:number; putsNotional:number; callsNotional:number; netNotional:number }>
+      = {} as any;
+    opts.forEach(o => {
+      const u = o.underlying || '';
+      if (!map[u]) map[u] = { putsContracts:0, callsContracts:0, putsNotional:0, callsNotional:0, netNotional:0 };
+      const contracts = Math.abs(Number(o.contracts)||0);
+      const strike = Number((o as any).strike) || 0;
+      const mult = Number((o as any).calcMultiplier) || Number((o as any).multiplier) || 100;
+      const notional = Number((o as any).notional) || (strike * mult * contracts) || 0;
+      if ((o as any).optType === 'P') { map[u].putsContracts += contracts; map[u].putsNotional += notional; map[u].netNotional += notional; }
+      else if ((o as any).optType === 'C') { map[u].callsContracts += contracts; map[u].callsNotional += notional; map[u].netNotional += notional; }
+    });
+    return map;
+  }
+
+  // Precios con actualización incremental según proveedor
+  async fetchPricesBatch(tickers: string[]) {
+    const out: Record<string, number> = {} as any;
+    for (const t of tickers) {
+      out[t] = await this.fetchPrice(t);
+      if (this.priceProvider === 'finnhub') { await this.delay(1100); } // 60/min gratis
+    }
+    return out;
+  }
   async fetchPrice(ticker:string){
     try {
-      const resp = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}&crumb=zhS.9NVhP/N`);
-      const json = await resp.json();
-      return json.quoteResponse.result[0]?.regularMarketPrice || 0;
+      // Asegurar series actualizadas en DB y devolver el último cierre conocido
+      if (this.priceProvider === 'finnhub') await this.ensurePricesUpToDateFinnhub(ticker);
+      else await this.ensurePricesUpToDateAlpha(ticker);
+      const last = this.getLatestCloseFromDb(ticker);
+      return last ?? 0;
     } catch (e) {
       if (!this.priceErrorShown.has(ticker)) {
         this.toast.error(`No se pudo obtener el precio para ${ticker}.`);
         this.priceErrorShown.add(ticker);
       }
       return 0;
+    }
+  }
+
+  // Configuración de proveedores y API keys (se guardan en localStorage)
+  setAlphaVantageKey(key: string) { this.alphaApiKey = key || null; try { if (key) localStorage.setItem('alphaVantageKey', key); else localStorage.removeItem('alphaVantageKey'); } catch { } }
+  getAlphaVantageKey() { return this.alphaApiKey; }
+  setFinnhubKey(key: string) { this.finnhubApiKey = key || null; try { if (key) localStorage.setItem('finnhubKey', key); else localStorage.removeItem('finnhubKey'); } catch { } }
+  getFinnhubKey() { return this.finnhubApiKey; }
+  setPriceProvider(provider: 'alpha' | 'finnhub') { this.priceProvider = provider; try { localStorage.setItem('priceProvider', provider); } catch { } }
+  getPriceProvider() { return this.priceProvider; }
+  private saveFinnhubMap() { try { localStorage.setItem('finnhubSymbolMap', JSON.stringify(this.finnhubSymbolMap)); } catch { } }
+  async updateAllPrices() {
+    // Construir universo de tickers desde trades y opciones
+    const trades = this.trades();
+    const opts = this.options();
+    const set = new Set<string>();
+    trades.forEach(t => { if (t.Ticker) set.add(String(t.Ticker).toUpperCase()); });
+    opts.forEach(o => { if (o.underlying) set.add(String(o.underlying).toUpperCase()); });
+    const tickers = Array.from(set.values());
+    let addedTotal = 0;
+    for (const t of tickers) {
+      try {
+        const added = this.priceProvider === 'finnhub'
+          ? await this.ensurePricesUpToDateFinnhub(t)
+          : await this.ensurePricesUpToDateAlpha(t);
+        addedTotal += (added || 0);
+      } catch (err: any) {
+        this.toast.error(`${t}: error al actualizar precios.`);
+      }
+      if (this.priceProvider === 'finnhub') { await this.delay(1100); }
+    }
+    this.toast.success(`Precios actualizados: ${addedTotal} registros nuevos (${tickers.length} tickers).`);
+    return { updated: addedTotal, tickers };
+  }
+
+  async updatePricesForTicker(ticker: string) {
+    if (!ticker) return { updated: 0 };
+    try {
+      const added = this.priceProvider === 'finnhub'
+        ? await this.ensurePricesUpToDateFinnhub(String(ticker).toUpperCase())
+        : await this.ensurePricesUpToDateAlpha(String(ticker).toUpperCase());
+      return { updated: added || 0 };
+    } catch (e) {
+      this.toast.error(`${ticker}: error al actualizar precios.`);
+      return { updated: 0 };
     }
   }
 
@@ -358,13 +454,19 @@ export class DataService {
       this._db.run(`CREATE TABLE IF NOT EXISTS transfers (id TEXT PRIMARY KEY, date INTEGER, amount REAL, currency TEXT);`);
       this._db.run(`CREATE TABLE IF NOT EXISTS dividends (id TEXT PRIMARY KEY, date INTEGER, amount REAL, currency TEXT, ticker TEXT, tax REAL, country TEXT);`);
       this._db.run(`CREATE TABLE IF NOT EXISTS options (id TEXT PRIMARY KEY, date INTEGER, underlying TEXT, symbol TEXT, side TEXT, contracts INTEGER, tradePrice REAL, multiplier INTEGER, premiumGross REAL, commission REAL, commCurrency TEXT, currency TEXT);`);
-      // Migración: añadir columna execId si falta
+      this._db.run(`CREATE TABLE IF NOT EXISTS prices (ticker TEXT, date INTEGER, close REAL, PRIMARY KEY (ticker, date));`);
+      // Migración: añadir columnas si faltan
       try {
         const info = this._db.exec('PRAGMA table_info(options)');
         const cols = info.length ? info[0].values.map((v:any)=> v[1]) : [];
         if (cols.indexOf('execId') === -1) {
           this._db.run('ALTER TABLE options ADD COLUMN execId TEXT');
         }
+        if (cols.indexOf('expiry') === -1) this._db.run('ALTER TABLE options ADD COLUMN expiry INTEGER');
+        if (cols.indexOf('optType') === -1) this._db.run('ALTER TABLE options ADD COLUMN optType TEXT');
+        if (cols.indexOf('strike') === -1) this._db.run('ALTER TABLE options ADD COLUMN strike REAL');
+        if (cols.indexOf('calcMultiplier') === -1) this._db.run('ALTER TABLE options ADD COLUMN calcMultiplier INTEGER');
+        if (cols.indexOf('notional') === -1) this._db.run('ALTER TABLE options ADD COLUMN notional REAL');
       } catch {}
     } catch {}
   }
@@ -373,38 +475,56 @@ export class DataService {
   async addDividends(rows:DividendRow[]){ await this.initDb(); const stmt = this._db.prepare('INSERT OR IGNORE INTO dividends VALUES (?,?,?,?,?,?,?)'); this._db.run('BEGIN'); rows.forEach(r => stmt.run([ String(r.ActionID), r.DateTime.getTime(), r.Amount, r.CurrencyPrimary, r.Ticker || '', r.Tax, r.IssuerCountryCode ])); this._db.run('COMMIT'); stmt.free(); this.saveDb(); }
   async addOptions(rows:any[]){
     await this.initDb(); if (!rows.length) return;
-    let hasExec = false;
+    let cols:string[] = [];
     try {
       const info = this._db.exec('PRAGMA table_info(options)');
-      const cols = info.length ? info[0].values.map((v:any)=> v[1]) : [];
-      hasExec = cols.indexOf('execId') !== -1;
+      cols = info.length ? info[0].values.map((v:any)=> v[1]) : [];
     } catch {}
-    const sql = hasExec
-      ? 'INSERT OR IGNORE INTO options (id, date, underlying, symbol, side, contracts, tradePrice, multiplier, premiumGross, commission, commCurrency, currency, execId) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
-      : 'INSERT OR IGNORE INTO options (id, date, underlying, symbol, side, contracts, tradePrice, multiplier, premiumGross, commission, commCurrency, currency) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)';
+    const present = ['id','date','underlying','symbol','side','contracts','tradePrice','multiplier','premiumGross','commission','commCurrency','currency','execId','expiry','optType','strike','calcMultiplier','notional'].filter(c => cols.indexOf(c)!==-1);
+    const sql = `INSERT OR IGNORE INTO options (${present.join(',')}) VALUES (${present.map(()=>'?').join(',')})`;
     const stmt = this._db.prepare(sql);
     this._db.run('BEGIN');
     rows.forEach((r:any) => {
-      const base = [ String(r.OptionID), r.DateTime.getTime(), r.underlying, r.symbol, r.side, r.contracts, r.tradePrice, r.multiplier, r.premiumGross, r.commission, r.commissionCurrency||null, r.currencyPrimary ];
-      const params = hasExec ? [...base, r.execId || null] : base;
+      const vals:Record<string, any> = {
+        id:String(r.OptionID), date:r.DateTime.getTime(), underlying:r.underlying, symbol:r.symbol, side:r.side,
+        contracts:r.contracts, tradePrice:r.tradePrice, multiplier:r.multiplier, premiumGross:r.premiumGross,
+        commission:r.commission, commCurrency:r.commissionCurrency||null, currency:r.currencyPrimary,
+        execId:r.execId||null, expiry:r.expiry? r.expiry.getTime(): null, optType:r.optType||null, strike:r.strike||null,
+        calcMultiplier:r.calcMultiplier||null, notional:r.notional||null
+      };
+      const params = present.map(c => vals[c]);
       stmt.run(params);
     });
     this._db.run('COMMIT'); stmt.free(); this.saveDb();
   }
   async getOptions():Promise<any[]>{
     await this.initDb();
-    let hasExec = false;
+    let cols:string[] = [];
     try {
       const info = this._db.exec('PRAGMA table_info(options)');
-      const cols = info.length ? info[0].values.map((v:any)=> v[1]) : [];
-      hasExec = cols.indexOf('execId') !== -1;
+      cols = info.length ? info[0].values.map((v:any)=> v[1]) : [];
     } catch {}
-    const sql = hasExec
-      ? 'SELECT id, date, underlying, symbol, side, contracts, tradePrice, multiplier, premiumGross, commission, commCurrency, currency, execId FROM options'
-      : 'SELECT id, date, underlying, symbol, side, contracts, tradePrice, multiplier, premiumGross, commission, commCurrency, currency FROM options';
+    const selectCols = ['id','date','underlying','symbol','side','contracts','tradePrice','multiplier','premiumGross','commission','commCurrency','currency'];
+    if (cols.indexOf('execId')!==-1) selectCols.push('execId');
+    if (cols.indexOf('expiry')!==-1) selectCols.push('expiry');
+    if (cols.indexOf('optType')!==-1) selectCols.push('optType');
+    if (cols.indexOf('strike')!==-1) selectCols.push('strike');
+    if (cols.indexOf('calcMultiplier')!==-1) selectCols.push('calcMultiplier');
+    if (cols.indexOf('notional')!==-1) selectCols.push('notional');
+    const sql = `SELECT ${selectCols.join(', ')} FROM options`;
     const res = this._db.exec(sql);
     if (!res.length) return [];
-    return res[0].values.map((row:any[]) => ({ OptionID: row[0], DateTime: new Date(row[1]), underlying: row[2], symbol: row[3], side: row[4], contracts: row[5], tradePrice: row[6], multiplier: row[7], premiumGross: row[8], commission: row[9], commissionCurrency: row[10], currencyPrimary: row[11], execId: hasExec ? row[12] : undefined }));
+    return res[0].values.map((row:any[]) => {
+      const out:any = { OptionID: row[0], DateTime: new Date(row[1]), underlying: row[2], symbol: row[3], side: row[4], contracts: row[5], tradePrice: row[6], multiplier: row[7], premiumGross: row[8], commission: row[9], commissionCurrency: row[10], currencyPrimary: row[11] };
+      let i = 12;
+      if (cols.indexOf('execId')!==-1) out.execId = row[i++];
+      if (cols.indexOf('expiry')!==-1) { const v = row[i++]; out.expiry = v ? new Date(v) : undefined; }
+      if (cols.indexOf('optType')!==-1) out.optType = row[i++];
+      if (cols.indexOf('strike')!==-1) out.strike = row[i++];
+      if (cols.indexOf('calcMultiplier')!==-1) out.calcMultiplier = row[i++];
+      if (cols.indexOf('notional')!==-1) out.notional = row[i++];
+      return out;
+    });
   }
   async getTrades():Promise<TradeRow[]>{ await this.initDb(); const res = this._db.exec('SELECT id, ticker, quantity, purchase, date, commission FROM trades'); if (!res.length) return []; return res[0].values.map((row:any[]) => ({ TradeID: row[0], Ticker: row[1], Quantity: row[2], PurchasePrice: row[3], DateTime: row[4] ? new Date(row[4]) : null, Commission: row[5] ?? null })); }
   async getTransfers():Promise<TransferRow[]>{ await this.initDb(); const res = this._db.exec('SELECT id, date, amount, currency FROM transfers'); if (!res.length) return []; return res[0].values.map((row:any[]) => ({ TransactionID: row[0], DateTime: new Date(row[1]), Amount: row[2], CurrencyPrimary: row[3] })); }
@@ -414,6 +534,31 @@ export class DataService {
     const s = String(symbol || '').toUpperCase();
     const m = s.match(/^[A-Z]+/);
     return m ? m[0] : '';
+  }
+
+  private parseOccSymbol(symbol:string){
+    const s = String(symbol || '').toUpperCase().trim();
+    // Soportar distintas variantes sin '@' y con/ sin espacio entre raíz y resto
+    // Patrones posibles:
+    //  - ABC 240119C00190000
+    //  - ABC240119C00190000
+    //  - ABC@240119C00190000
+    const patterns = [
+      /^([A-Z0-9.-]+)\s+(\d{6})([CP])(\d{8})$/,   // con espacio
+      /^([A-Z0-9.-]+)@(\d{6})([CP])(\d{8})$/,      // con '@'
+      /^([A-Z0-9.-]+?)(\d{6})([CP])(\d{8})$/       // sin separador
+    ];
+    let m: RegExpMatchArray | null = null;
+    for (const p of patterns) { m = s.match(p); if (m) break; }
+    if (!m) return { underlying:'', expiry:undefined, optType:undefined as any, strike:undefined, calcMultiplier:undefined };
+    const underlying = m[1];
+    const yy = parseInt(m[2].slice(0,2), 10); const mm = parseInt(m[2].slice(2,4), 10); const dd = parseInt(m[2].slice(4,6), 10);
+    const year = 2000 + yy; const expiry = new Date(year, mm-1, dd);
+    const optType = (m[3] as any);
+    const strikeRaw = parseInt(m[4], 10) || 0;
+    const strike = strikeRaw / 1000; // OCC: 3 decimales (strike viene multiplicado por 1000)
+    const calcMultiplier = 100;      // multiplicador estándar de contratos de equity (prima/notional)
+    return { underlying, expiry, optType, strike, calcMultiplier };
   }
 
   // Reset de datos locales
@@ -431,5 +576,136 @@ export class DataService {
     this.dividendIds.clear();
     this.priceErrorShown.clear();
     this.toast.success('Datos locales borrados correctamente.');
+  }
+
+  // ====== Precios (Alpha Vantage) ======
+  private getLatestPriceDateFromDb(ticker: string): number | null {
+    try {
+      const stmt = this._db.prepare('SELECT MAX(date) as d FROM prices WHERE ticker = ?');
+      stmt.bind([ticker]);
+      let out: number | null = null;
+      if (stmt.step()) {
+        const row = stmt.getAsObject();
+        const v = (row as any).d;
+        out = (typeof v === 'number' && !isNaN(v)) ? v : null;
+      }
+      stmt.free();
+      return out;
+    } catch { return null; }
+  }
+  private getLatestCloseFromDb(ticker: string): number | null {
+    try {
+      const stmt = this._db.prepare('SELECT close FROM prices WHERE ticker = ? ORDER BY date DESC LIMIT 1');
+      stmt.bind([ticker]);
+      let out: number | null = null;
+      if (stmt.step()) {
+        const row = stmt.getAsObject();
+        const v = (row as any).close;
+        out = (typeof v === 'number' && !isNaN(v)) ? v : null;
+      }
+      stmt.free();
+      return out;
+    } catch { return null; }
+  }
+  private addPricesDb(ticker: string, rows: { date: number; close: number }[]) {
+    if (!rows.length) return;
+    const stmt = this._db.prepare('INSERT OR IGNORE INTO prices (ticker, date, close) VALUES (?,?,?)');
+    this._db.run('BEGIN');
+    rows.forEach(r => stmt.run([ticker, r.date, r.close]));
+    this._db.run('COMMIT');
+    stmt.free();
+    this.saveDb();
+  }
+  async getPricesSeries(ticker: string): Promise<{ date: Date, close: number }[]> {
+    await this.initDb();
+    const stmt = this._db.prepare('SELECT date, close FROM prices WHERE ticker = ? ORDER BY date ASC');
+    stmt.bind([ticker]);
+    const out: { date: Date, close: number }[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject();
+      const d = (row as any).date as number;
+      const c = (row as any).close as number;
+      if (typeof d === 'number' && typeof c === 'number') out.push({ date: new Date(d), close: c });
+    }
+    stmt.free();
+    return out;
+  }
+  getLatestPriceDate(ticker: string): Date | null {
+    const ms = this.getLatestPriceDateFromDb(ticker);
+    return ms ? new Date(ms) : null;
+  }
+  private async ensurePricesUpToDateAlpha(ticker: string) {
+    await this.initDb();
+    const key = this.alphaApiKey;
+    if (!key) { if (!this.priceErrorShown.has('APIKEY')) { this.toast.info('Configura tu API Key de Alpha Vantage para actualizar precios.'); this.priceErrorShown.add('APIKEY'); } return 0; }
+    const lastDateMs = this.getLatestPriceDateFromDb(ticker);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (lastDateMs && lastDateMs >= today.getTime()) return 0; // ya está al día
+    // Descargar serie compacta (últimos ~100 días) y guardar solo faltantes
+    this.toast.info(`Descargando precios de ${ticker} (Alpha Vantage)...`);
+    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(ticker)}&outputsize=compact&apikey=${encodeURIComponent(key)}`;
+    const resp = await fetch(url);
+    const json = await resp.json();
+    const series = json['Time Series (Daily)'] || json['Time Series Daily'] || {};
+    const rows: { date: number; close: number }[] = Object.keys(series).map(d => {
+      const o = series[d];
+      const close = parseFloat(o['5. adjusted close'] ?? o['4. close'] ?? '0') || 0;
+      const [y, m, dd] = d.split('-').map(n => parseInt(n, 10));
+      const ms = new Date(y, (m || 1) - 1, dd || 1).setHours(0, 0, 0, 0);
+      return { date: ms, close };
+    }).filter(r => r.close > 0)
+      .sort((a, b) => a.date - b.date);
+    const missing = lastDateMs ? rows.filter(r => r.date > lastDateMs) : rows;
+    this.addPricesDb(ticker, missing);
+    if (missing.length > 0) this.toast.success(`${ticker}: ${missing.length} registros nuevos (Alpha).`);
+    else this.toast.info(`${ticker}: sin cambios (Alpha).`);
+    return missing.length;
+  }
+
+  private async ensurePricesUpToDateFinnhub(ticker: string) {
+    await this.initDb();
+    const key = this.finnhubApiKey;
+    if (!key) { if (!this.priceErrorShown.has('FINNAPIKEY')) { this.toast.info('Configura tu API Key de Finnhub para actualizar precios.'); this.priceErrorShown.add('FINNAPIKEY'); } return 0; }
+    const lastDateMs = this.getLatestPriceDateFromDb(ticker);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    // Si ya hay dato de hoy, no llamar a la API
+    if (lastDateMs && lastDateMs >= today.getTime()) return 0;
+    this.toast.info(`Descargando precios de ${ticker} (Finnhub Quote)...`);
+    const sym = await this.resolveFinnhubSymbol(ticker, key);
+    const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(key)}`;
+    const resp = await fetch(url);
+    const json = await resp.json();
+    if ((resp.status === 403) || (json && typeof json.error === 'string' && json.error.toLowerCase().includes("don't have access"))) {
+      this.toast.warning(`${ticker}: Finnhub denegó acceso a este recurso.`);
+      return 0;
+    }
+    // Esperamos campos: c (precio actual), t (epoch seconds)
+    const close = Number(json?.c || 0);
+    const tsSec = Number(json?.t || 0);
+    if (!close || !tsSec) { this.toast.info(`${ticker}: sin datos de Quote en Finnhub.`); return 0; }
+    const d = new Date(tsSec * 1000); d.setHours(0,0,0,0);
+    const row = { date: d.getTime(), close };
+    if (lastDateMs && row.date <= lastDateMs) { this.toast.info(`${ticker}: sin cambios (Finnhub Quote).`); return 0; }
+    this.addPricesDb(ticker, [row]);
+    this.toast.success(`${ticker}: 1 registro nuevo (Finnhub Quote).`);
+    return 1;
+  }
+
+  private delay(ms: number) { return new Promise<void>(res => setTimeout(res, ms)); }
+  private normalizeTickerForSearch(t: string) { const up = String(t || '').toUpperCase(); return up.includes('.') ? up.split('.')[0] : up; }
+  private async resolveFinnhubSymbol(ticker: string, key: string): Promise<string> {
+    const t = String(ticker).toUpperCase();
+    if (this.finnhubSymbolMap[t]) return this.finnhubSymbolMap[t];
+    const q = this.normalizeTickerForSearch(t);
+    try {
+      const url = `https://finnhub.io/api/v1/search?q=${encodeURIComponent(q)}&token=${encodeURIComponent(key)}`;
+      const resp = await fetch(url);
+      const json = await resp.json();
+      const results = Array.isArray(json?.result) ? json.result : [];
+      let best: any = results.find((r: any) => String(r.symbol || '').toUpperCase() === q) || results.find((r: any) => String(r.symbol || '').toUpperCase().startsWith(q)) || results[0];
+      const sym = String(best?.symbol || q);
+      this.finnhubSymbolMap[t] = sym; this.saveFinnhubMap();
+      return sym;
+    } catch { return q; }
   }
 }

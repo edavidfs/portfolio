@@ -1,0 +1,53 @@
+<div class="container mx-auto mb-4 flex items-center gap-3">
+  <input class="border rounded px-2 py-1 text-sm" placeholder="Filtrar por ticker" [value]="query()" (input)="setQuery($any($event.target).value)" />
+  <label class="inline-flex items-center gap-2 text-sm">
+    <input type="checkbox" [checked]="showZero()" (change)="toggleShowZero($any($event.target).checked)" />
+    Incluir sin posición
+  </label>
+  <div class="ml-auto flex items-center gap-2 text-sm">
+    <span class="text-gray-600">Ordenar por:</span>
+    <select class="border rounded px-2 py-1" [value]="sortKey()" (change)="setSortKey($any($event.target).value)">
+      <option value="ticker">Ticker</option>
+      <option value="quantity">Posición</option>
+      <option value="purchase">Precio Compra</option>
+      <option value="baseCostPerShare">Base coste/acc</option>
+      <option value="baseCostTotal">Coste total</option>
+      <option value="current">Precio Actual</option>
+      <option value="currentValue">Valor total</option>
+      <option value="pl">P/L</option>
+    </select>
+    <button class="border rounded px-2 py-1" (click)="toggleSortDir()">{{ sortDir() === 'asc' ? 'Asc' : 'Desc' }}</button>
+  </div>
+</div>
+<div class="container mx-auto">
+  <canvas id="positionsChart" height="60"></canvas>
+</div>
+<div class="container mx-auto mt-4">
+  <table class="min-w-full divide-y divide-gray-200">
+    <thead class="bg-gray-50">
+      <tr>
+        <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Ticker</th>
+        <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Posición</th>
+        <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Precio Compra</th>
+        <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Base coste/acc</th>
+        <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Coste total</th>
+        <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Precio Actual</th>
+        <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Valor total</th>
+        <th class="px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">P/L</th>
+      </tr>
+    </thead>
+    <tbody class="bg-white divide-y divide-gray-200">
+      <tr *ngFor="let r of filteredSortedRows()">
+        <td class="px-3 py-1"><a class="text-blue-700 hover:underline" [routerLink]="['/ticker', r.ticker]">{{r.ticker}}</a></td>
+        <td class="px-3 py-1">{{r.quantity | number:'1.0-2'}}</td>
+        <td class="px-3 py-1">{{r.purchase | number:'1.2-2'}}</td>
+        <td class="px-3 py-1">{{r.baseCostPerShare | number:'1.2-2'}}</td>
+        <td class="px-3 py-1">{{r.baseCostTotal | number:'1.2-2'}}</td>
+        <td class="px-3 py-1">{{r.current | number:'1.2-2'}}</td>
+        <td class="px-3 py-1">{{r.currentValue | number:'1.2-2'}}</td>
+        <td class="px-3 py-1">{{r.pl | number:'1.2-2'}}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
