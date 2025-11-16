@@ -1,11 +1,13 @@
 # --- Salidas compiladas (Angular)
-dist/
-tmp/
-out-tsc/
+frontend/dist/
+frontend/tmp/
+frontend/out-tsc/
 bazel-out/
 
 # --- Dependencias
-node_modules/
+**/node_modules/
+src-tauri/target/
+src-tauri/gen/
 
 # --- Cachés Angular
 **/.angular/cache/

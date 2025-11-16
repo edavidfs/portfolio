@@ -7,7 +7,7 @@ Aplicación web sencilla para gestionar un portfolio de inversión. Se puede imp
 - Dividendos recibidos.
 - Opciones negociadas.
 
-La interfaz está construida con **Tailwind CSS** y muestra:
+La interfaz está construida con **Angular + Tailwind CSS** y muestra:
 
 - Una barra superior con el nombre de la aplicación.
 - Una gráfica que muestra la evolución temporal del efectivo por moneda combinando transferencias y dividendos.
@@ -16,7 +16,23 @@ La interfaz está construida con **Tailwind CSS** y muestra:
 - En la pestaña de dividendos se muestran además los totales diarios y un resumen acumulado por activo.
 - Solo se registran dividendos cuyo `Code` sea `Po`. El campo `ActionID` evita duplicados, `GrossAmount` indica el importe bruto y `Tax` la retención asociada al país `IssuerCountryCode`.
 
-Para usarla abre `index.html` en un navegador con conexión a Internet y selecciona los archivos CSV correspondientes. Se pueden cargar varios ficheros de transferencias y solo se registrarán aquellas cuyo `TransactionID` sea único. La gráfica de efectivo combina el historial de transferencias y los dividendos, mientras que la tabla de posiciones se alimenta de las operaciones de acciones.
+## Arquitectura y ejecución
+
+- `frontend/`: aplicación Angular que contiene los componentes, servicios y estilos. Aquí se trabaja el 100 % de la UI.
+- `src-tauri/`: envoltorio Tauri (Rust) que empaqueta la UI para escritorio y orquesta el build.
+- CSV de ejemplo (`portafolio-dividendos.csv`, etc.) siguen en la raíz para validar importaciones.
+
+### Desarrollo rápido
+
+1. Instalar dependencias del frontend: `npm install` dentro de `frontend/` (o simplemente `just install_dev` desde la raíz).
+   - Para preparar la CLI nativa de Tauri (requiere Rust + `cargo`): `just install_tauri`. Si quieres dejar todo listo de una vez, usa `just install_all`.
+2. Servir en modo web: `npm start` en `frontend/` y abrir `http://localhost:4200`.
+3. Ejecutar versión escritorio: `cd src-tauri && cargo tauri dev` o simplemente `just dev`. Tauri lanzará `ng serve` automáticamente gracias a `beforeDevCommand`.
+4. Generar binarios Tauri: `cd src-tauri && cargo tauri build` (o `just build`, que primero ejecuta `npm run build` en `frontend/` y después empaqueta con Tauri).
+
+El empaquetado de Tauri usa `src-tauri/tauri.conf.json`, donde se define el comando previo de desarrollo (`npm run start --prefix ../frontend`) y la carpeta de salida (`frontend/dist/ng-portfolio`). El build de Angular se ejecuta antes de invocar Tauri (p. ej. al usar `just build`).
+
+Para usarla en modo web, abre `http://localhost:4200` (via `ng serve`) o sirve la carpeta `frontend/dist/ng-portfolio` y selecciona los archivos CSV correspondientes. Se pueden cargar varios ficheros de transferencias y solo se registrarán aquellas cuyo `TransactionID` sea único. La gráfica de efectivo combina el historial de transferencias y los dividendos, mientras que la tabla de posiciones se alimenta de las operaciones de acciones.
 
 ### Formato del CSV de transferencias
 
