@@ -6,6 +6,11 @@ bazel-out/
 
 # --- Dependencias
 **/node_modules/
+backend/__pycache__/
+backend/.venv/
+backend/.uv-cache/
+backend/portfolio.db
+backend/*.log
 src-tauri/target/
 src-tauri/gen/
 

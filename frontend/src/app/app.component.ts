@@ -29,9 +29,9 @@ export class AppComponent {
     });
   }
   setView(v: 'positions'|'cash'|'transfers'|'dividends'|'imports'){ this.view.set(v); }
-  onReset(){
-    const ok = confirm('Esto borrará todos los datos locales. ¿Continuar?');
-    if (!ok) return;
-    this.data.reset();
+  closeDetail(){
+    if (this.router.url.startsWith('/ticker/')) {
+      this.router.navigateByUrl('/');
+    }
   }
 }

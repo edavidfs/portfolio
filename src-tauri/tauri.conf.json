@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.portfolio.desktop",
   "build": {
-    "beforeDevCommand": "npm run start --prefix ../frontend",
+    "beforeDevCommand": "npm run start --prefix ./frontend",
     "devUrl": "http://localhost:4200",
     "frontendDist": "../frontend/dist/ng-portfolio"
   },

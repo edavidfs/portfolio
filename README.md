@@ -28,11 +28,39 @@ La interfaz está construida con **Angular + Tailwind CSS** y muestra:
    - Para preparar la CLI nativa de Tauri (requiere Rust + `cargo`): `just install_tauri`. Si quieres dejar todo listo de una vez, usa `just install_all`.
 2. Servir en modo web: `npm start` en `frontend/` y abrir `http://localhost:4200`.
 3. Ejecutar versión escritorio: `cd src-tauri && cargo tauri dev` o simplemente `just dev`. Tauri lanzará `ng serve` automáticamente gracias a `beforeDevCommand`.
-4. Generar binarios Tauri: `cd src-tauri && cargo tauri build` (o `just build`, que primero ejecuta `npm run build` en `frontend/` y después empaqueta con Tauri).
+4. Generar binarios Tauri: `cd src-tauri && cargo tauri build` (o `just build`, que primero ejecuta `npm run build` en `frontend/` y después empaqueta con Tauri). Desde la barra del sistema (menú “Ver → Mostrar DevTools”) puedes abrir las herramientas de desarrollo cuando estés en el wrapper de escritorio.
+5. Backend FastAPI (nuevo servicio):
+   - Requisitos: [uv](https://github.com/astral-sh/uv) o Python 3.9+.
+   - Crear entorno: `uv venv backend/.venv` y luego `source backend/.venv/bin/activate && pip install -r backend/requirements.txt`.
+   - (Opcional) Ejecutar servidor manualmente: `just backend` (o `uvicorn backend.api.main:app --reload`). **Nota:** Tauri lo arranca automáticamente al lanzar `just dev`, reutilizando `backend/.venv/bin/python`. Si no quieres ese comportamiento, exporta `PORTFOLIO_NO_BACKEND=1`.
+   - Por defecto escucha en `http://127.0.0.1:8000`. Puedes sobrescribir la URL en el frontend definiendo `window.__PORTFOLIO_API__ = 'http://...'` antes de bootstrappedar Angular. La base SQLite se guarda en el directorio de datos del usuario (ej. `~/Library/Application Support/com.portfolio.desktop/portfolio.db`). Para forzar otra ruta, exporta `PORTFOLIO_DB_PATH=/ruta/portfolio.db` antes de arrancar el backend.
 
 El empaquetado de Tauri usa `src-tauri/tauri.conf.json`, donde se define el comando previo de desarrollo (`npm run start --prefix ../frontend`) y la carpeta de salida (`frontend/dist/ng-portfolio`). El build de Angular se ejecuta antes de invocar Tauri (p. ej. al usar `just build`).
 
 Para usarla en modo web, abre `http://localhost:4200` (via `ng serve`) o sirve la carpeta `frontend/dist/ng-portfolio` y selecciona los archivos CSV correspondientes. Se pueden cargar varios ficheros de transferencias y solo se registrarán aquellas cuyo `TransactionID` sea único. La gráfica de efectivo combina el historial de transferencias y los dividendos, mientras que la tabla de posiciones se alimenta de las operaciones de acciones.
+
+### Backend Python + SQLite
+
+- Existe un backend mínimo en `backend/` (scripts `db.py` e `importer.py`). El wrapper Tauri extrae estos ficheros a la carpeta de datos del usuario (`AppData`/`~/Library/Application Support/com.portfolio.desktop/`) y ejecuta `python3 importer.py`.
+- Cada importación crea un lote (`import_batches`) y almacena cada fila del CSV como historial (`import_rows`). Para transferencias se normaliza la información en la tabla `transfers`; para operaciones STK se rellenan registros en la tabla `trades`.
+- En la app de escritorio (o incluso en el navegador), al seleccionar CSVs de transferencias u operaciones, Angular los parsea y envía las filas al backend FastAPI (JSON). Así no dependemos de rutas ni permisos especiales y todo acaba persistido en SQLite (`portfolio.db`).
+- Se requiere tener `python3` disponible en el PATH. Si el backend no está corriendo, la UI mostrará toasts de error al intentar sincronizar/importar.
+- La base `portfolio.db` y el log `backend.log` quedan accesibles para copias de seguridad y depuración.
+
+### Servicio FastAPI
+
+- Código en `backend/api/main.py`. Arranca un servidor REST (`uvicorn backend.api.main:app --reload`) con los endpoints:
+  - `POST /import/transfers` y `POST /import/trades`: aceptan `{ rows: [] }` y delegan en `importer.py` para persistir.
+  - `POST /reset`: elimina `portfolio.db` y reinicia el backend (botón disponible en la pestaña de importaciones).
+  - `GET /transfers` y `GET /trades`: devuelven los registros guardados en SQLite.
+  - `GET /health`: simple comprobación.
+- En la pestaña “Importaciones” hay un botón “Borrar base de datos” que invoca ese endpoint `/reset` y refresca las tablas una vez completado.
+- Configuración:
+  - `PORTFOLIO_DB_PATH`: (opcional) ruta absoluta del `.db`. Por defecto usa el directorio de datos del usuario (`~/Library/Application Support/com.portfolio.desktop/portfolio.db` en macOS, rutas equivalentes en Windows/Linux). Puedes definirla en un `.env` en la raíz (`PORTFOLIO_DB_PATH=/ruta/custom.db`).
+  - En el frontend puedes definir `window.__PORTFOLIO_API__ = 'http://localhost:8000';` antes de bootstrap para apuntar a otra URL.
+  - `PORTFOLIO_NO_BACKEND=1`: evita que Tauri lance el backend automáticamente (útil si ya lo estás ejecutando aparte).
+- El backend reutiliza `importer.py`, así que las reglas de deduplicación y normalización son idénticas a las del CLI.
+- Los logs (`portfolio.log`) se escriben en el mismo directorio que la base de datos (Application Support por defecto).
 
 ### Formato del CSV de transferencias
 

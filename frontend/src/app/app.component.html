@@ -1,11 +1,8 @@
 <nav class="bg-gray-800 text-white p-4">
-  <div class="flex items-center justify-between">
-    <h1 class="text-xl font-semibold">Portfolio (Angular)</h1>
-    <button class="inline-flex items-center px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-100 bg-transparent hover:bg-red-700/30" (click)="onReset()" title="Borrar datos locales">Reset</button>
-  </div>
+  <h1 class="text-xl font-semibold">Portfolio (Angular)</h1>
 </nav>
 <app-toasts></app-toasts>
-<div class="flex min-h-screen">
+<div class="flex min-h-screen relative">
   <aside class="w-64 bg-white border-r p-4 space-y-2">
     <button class="w-full text-left px-3 py-2 rounded hover:bg-gray-100" [class.bg-indigo-50]="view() === 'positions'" (click)="setView('positions')">Posiciones</button>
     <button class="w-full text-left px-3 py-2 rounded hover:bg-gray-100" [class.bg-indigo-50]="view() === 'cash'" (click)="setView('cash')">Efectivo</button>
@@ -15,16 +12,19 @@
     <button class="w-full text-left px-3 py-2 rounded hover:bg-gray-100" [class.bg-indigo-50]="view() === 'imports'" (click)="setView('imports')">Importaciones</button>
   </aside>
   <main class="flex-1 p-6 space-y-8">
-    <ng-container *ngIf="!isDetail(); else detail">
-      <app-positions-view *ngIf="view() === 'positions'"></app-positions-view>
-      <app-cash-view *ngIf="view() === 'cash'"></app-cash-view>
-      <app-transfers-view *ngIf="view() === 'transfers'"></app-transfers-view>
-      <app-dividends-view *ngIf="view() === 'dividends'"></app-dividends-view>
-      <app-imports-view *ngIf="view() === 'imports'"></app-imports-view>
-    </ng-container>
-    <ng-template #detail>
-      <router-outlet></router-outlet>
-    </ng-template>
+    <app-positions-view *ngIf="view() === 'positions'"></app-positions-view>
+    <app-cash-view *ngIf="view() === 'cash'"></app-cash-view>
+    <app-transfers-view *ngIf="view() === 'transfers'"></app-transfers-view>
+    <app-dividends-view *ngIf="view() === 'dividends'"></app-dividends-view>
+    <app-imports-view *ngIf="view() === 'imports'"></app-imports-view>
   </main>
 </div>
 
+<div *ngIf="isDetail()" class="fixed inset-0 z-40 flex items-start justify-center bg-black/60 p-6 overflow-y-auto" (click)="closeDetail()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl min-h-[80vh] relative" (click)="$event.stopPropagation()">
+    <button class="absolute top-3 right-3 text-sm px-3 py-1.5 rounded border hover:bg-gray-50" (click)="closeDetail()">Cerrar ✕</button>
+    <div class="max-h-[90vh] overflow-y-auto">
+      <router-outlet></router-outlet>
+    </div>
+  </div>
+</div>

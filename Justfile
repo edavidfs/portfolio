@@ -5,9 +5,19 @@ build:
     (cd frontend && npm run build)
     (cd src-tauri && cargo tauri build)
 
+# Arranca el backend FastAPI (requiere .venv creado con uv).
+backend:
+    (cd backend && source .venv/bin/activate && PYTHONPATH=.. uvicorn backend.api.main:app --reload)
+
+
 # Levanta la app en modo desarrollo con Tauri (cargo tauri dev lanza ng serve gracias a beforeDevCommand).
 dev:
     (cd src-tauri && cargo tauri dev)
+
+
+# Actualiza los paq uetes de rust
+update:
+    (cd src-tauri && cargo update)
 
 # Instala las dependencias del frontend (Angular) para desarrollo local.
 install_dev:

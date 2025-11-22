@@ -21,22 +21,29 @@ Esta guía resume la estructura actual (Angular + Tauri), el flujo de la aplicac
 
 ## Desarrollo Local
 
-1. Requisitos: Node 18+, npm, Rust (para Tauri) y `cargo`.
+1. Requisitos: Node 18+, npm, Rust (para Tauri) y `cargo`, además de `python3` disponible en el PATH (el backend de importación se ejecuta como script).
 2. Instalar dependencias frontend: `npm install` dentro de `frontend/` (también disponible como `just install_dev` desde la raíz).
    - Si todavía no tienes la CLI nativa de Tauri, ejecuta `just install_tauri` (o `just install_all` para dejar todo listo). Requiere que Rust y `cargo` estén instalados.
 3. Servir la UI web: `npm start` en `frontend/` y abrir `http://localhost:4200/`.
-4. Ejecutar el wrapper de escritorio: `cd src-tauri && cargo tauri dev` (o `just dev`). Este comando levanta `ng serve` automáticamente gracias a `beforeDevCommand` y abre la ventana Tauri.
-5. Build Angular standalone: `npm run build` dentro de `frontend/` (resulta en `frontend/dist/ng-portfolio`).
-6. Build binarios Tauri: `cd src-tauri && cargo tauri build`.
+4. Backend FastAPI:
+   - Crear entorno: `uv venv backend/.venv` y `source backend/.venv/bin/activate && pip install -r backend/requirements.txt`.
+   - `just backend` lanza `uvicorn backend.api.main:app --reload` (útil para depurar solo el backend).
+   - **Tauri lo inicia automáticamente** al ejecutar `just dev` usando `backend/.venv/bin/python`. Si prefieres gestionarlo manualmente, exporta `PORTFOLIO_NO_BACKEND=1`.
+   - El servicio expone `http://127.0.0.1:8000` y respeta `PORTFOLIO_DB_PATH` para ubicar la base.
+5. Ejecutar el wrapper de escritorio: `cd src-tauri && cargo tauri dev` (o `just dev`). Este comando levanta `ng serve` automáticamente y abre la ventana Tauri.
+   - Las DevTools se abren desde el menú de la aplicación (por ejemplo, “Ver → Mostrar DevTools” en macOS o Windows).
+6. Build Angular standalone: `npm run build` dentro de `frontend/` (resulta en `frontend/dist/ng-portfolio`).
+7. Build binarios Tauri: `cd src-tauri && cargo tauri build`.
    - Alternativa: con [`just`](https://github.com/casey/just) puedes ejecutar `just build`, que compila Angular y luego empaqueta Tauri de forma secuencial.
 
 ## Dependencias
 
 - Angular 17 (componentes standalone, Signals).
 - Chart.js para gráficos.
-- SQL.js para persistencia en memoria + snapshot.
-- Papa Parse para lectura de CSV.
-- `@tauri-apps/api` para futuras integraciones nativas.
+- SQL.js para persistencia en memoria + snapshot (modo web).
+- Backend Python (FastAPI en `backend/api/main.py`) que expone endpoints REST para importar y listar datos. El frontend envía los CSV parseados como JSON.
+- Papa Parse para lectura de CSV (solo en el flujo legacy del navegador).
+- `@tauri-apps/api` para integrarse con Tauri (file dialog, invoke).
 
 Chart.js, SQL.js y Papa Parse siguen entrando vía CDN en `frontend/src/index.html`. Mantén versiones fijas.
 
@@ -62,10 +69,10 @@ No hay framework de tests automatizados por ahora.
 
 ## Persistencia y Datos
 
-- SQL.js almacena trades, transferencias, dividendos, opciones y precios en memoria.
-- Tras cada importación se serializa la DB a `localStorage` (`portfolioDB`).
-- Al iniciar se intenta restaurar ese snapshot; si no existe, se crea una DB nueva.
-- Las claves/API (Alpha/Finnhub) también se guardan en `localStorage`.
+- SQL.js sigue gestionando el estado en memoria cuando se trabaja desde el navegador puro.
+- En modo escritorio (o web) levantando el backend FastAPI se procesan todas las importaciones. Se guardan como lotes (`import_batches` + `import_rows`) y se actualizan las tablas normalizadas (`transfers`, `trades`) de SQLite.
+- Tras cada importación legacy también se serializa la DB a `localStorage` (`portfolioDB`) para mantener compatibilidad.
+- Las claves/API (Alpha/Finnhub) se guardan en `localStorage`.
 
 ## Seguridad y Configuración
 

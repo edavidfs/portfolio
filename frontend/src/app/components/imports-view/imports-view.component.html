@@ -1,4 +1,7 @@
-<div class="space-y-4">
+<div class="relative space-y-4">
+  <div class="flex justify-end">
+    <button class="border border-red-300 text-red-600 rounded px-3 py-1.5 text-sm" (click)="openResetConfirm()">Borrar base de datos</button>
+  </div>
   <div>
     <label class="block text-sm font-medium mb-1">Operaciones (STK + CASH/FX)</label>
     <input type="file" multiple (change)="onTrades($event)" class="block" />
@@ -6,6 +9,7 @@
   <div>
     <label class="block text-sm font-medium mb-1">Transferencias</label>
     <input type="file" multiple (change)="onTransfers($event)" class="block" />
+    <p class="text-xs text-gray-500 mt-1">En la app de escritorio se envían al backend Python para guardarse en SQLite.</p>
   </div>
   <div>
     <label class="block text-sm font-medium mb-1">Dividendos</label>
@@ -37,3 +41,15 @@
   </div>
 </div>
 
+<div *ngIf="showResetConfirm" class="fixed inset-0 z-30 flex items-center justify-center bg-black/40">
+  <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 space-y-4">
+    <h2 class="text-lg font-semibold text-gray-800">Confirmar reseteo</h2>
+    <p class="text-sm text-gray-600">Esto eliminará la base de datos SQLite local del backend y dejará el dashboard vacío. ¿Deseas continuar?</p>
+    <div class="flex justify-end gap-3">
+      <button class="px-3 py-1.5 rounded border text-sm" (click)="closeResetConfirm()" [disabled]="resettingDb">Cancelar</button>
+      <button class="px-3 py-1.5 rounded bg-red-600 text-white text-sm disabled:opacity-70" (click)="confirmReset()" [disabled]="resettingDb">
+        {{ resettingDb ? 'Borrando…' : 'Borrar' }}
+      </button>
+    </div>
+  </div>
+</div>
