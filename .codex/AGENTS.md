@@ -45,7 +45,21 @@
   - **UI/UX (Angular) (A-UI)**: componentes, tablas y gráficas; entregables: vistas responsivas, manejo de errores y estados vacíos/cargando, accesibilidad básica.
   - **Trading/Estadística (A-TR)**: métricas (rendimientos, drawdown, riesgo) y señales ligeras/backtests acotados; entregables: cálculos verificables y endpoints/servicios para consumo en UI.
   - **Integración (Tauri/Rust) (A-TA)**: permisos de filesystem/red, empaquetado y puente a backend; entregables: configuración Tauri, manejo de rutas locales y actualización de la app.
-- **DevOps/Calidad (A-QA)**: scripts de entorno, lint/format, chequeos manuales con CSV de muestra y checklist de regresiones; entregables: scripts de arranque, guías de prueba y reporte de hallazgos.
+  - **DevOps/Calidad (A-QA)**: scripts de entorno, lint/format, chequeos manuales con CSV de muestra y checklist de regresiones; entregables: scripts de arranque, guías de prueba y reporte de hallazgos.
+
+## Referencias de requerimientos
+- Cada requerimiento debe tener código `REQ-XX-####` donde `XX` es el área y `####` un número secuencial por área.
+- Áreas sugeridas: UI (interfaz Angular/Tauri), TR (trading/estadística), BK (backend Python/API), AR (arquitectura/contratos), PO (producto/negocio), QA (pruebas/validación), TA (cliente Tauri).
+- Ejemplo: `REQ-UI-0001` para un requisito de dashboard; `REQ-TR-0003` para una métrica de riesgo; `REQ-BK-0005` para un endpoint.
+- Campos mínimos por requisito (formato ECSS simplificado):
+  - ID, título breve, tipo (Funcional, No funcional, Integración).
+  - Declaración (1-2 frases, sin conjunciones múltiples).
+  - Racional (por qué importa) y fuente/norma.
+  - Prioridad (Alta/Media/Baja) y estado.
+  - Método(s) de verificación: I/A/T/D (Inspección/Análisis/Prueba/Demostración).
+  - Criterios de aceptación medibles.
+  - Trazabilidad: Padres/Hijos/Objetivo y relaciones clave (REQ ↔ VV ↔ DOC).
+- Estilo: mostrar el ID en negrita en la documentación (ej. `**REQ-UI-0001** (Tipo: ...)`).
 
 ## Metodología de trabajo (TDD)
 - Default: aplicar TDD en backend Python, servicios Angular y utilidades Rust. Cada cambio de lógica debe ir con prueba unitaria o de integración que falle antes y pase después.
