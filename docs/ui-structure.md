@@ -27,6 +27,15 @@ Propósito: guiar la definición y construcción de la interfaz en Angular para 
 - `imports-panel`: inputs: `fileTypes`, `history[]`; outputs: `onUpload(type,file)`.
 - `settings-form`: inputs: `defaults`; outputs: `onSave`, `onCancel`.
 
+## Requerimientos del dashboard (A-UI con A-PO/A-TR)
+- KPIs: valor de cartera, TWR del rango, volatilidad anualizada, drawdown máximo/actual, Sharpe y Sortino (tasa libre configurable), PnL realizado/no realizado, dividendos del periodo.
+- Benchmark: mostrar retorno y curva del benchmark elegido en paralelo a la cartera.
+- Rangos rápidos: mes actual, YTD, último año completo y desde inicio; los filtros afectan KPIs, gráficos y tablas.
+- Gráfico principal: valor de cartera vs. benchmark con sombreado de drawdown; soporte de selección de rango.
+- Desglose por vehículo: tabla/resumen de activos (acciones, ETFs, bonos, opciones, efectivo) con peso, PnL y rentabilidad del periodo.
+- Movimientos del periodo: totales y recuentos de compras/ventas/dividendos para validar coherencia de flujos.
+- Estados: loading con skeletons, vacío con CTA (importar CSV), error con retry; alerta si precios/series están desactualizados.
+
 ## Contratos de datos (interfaces UI)
 - `PositionView`: `{ ticker, name?, class, units, price, value, pnlAbs, pnlPct, weight, currency, updatedAt }`
 - `Kpi`: `{ label, value, delta?, unit?, tooltip?, loading }`
