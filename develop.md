@@ -1,94 +1,101 @@
 ## Guía de Desarrollo
 
-Esta guía resume la estructura del repositorio, el flujo de la aplicación y las prácticas recomendadas para contribuir. Todo se mantiene en castellano: código, comentarios y comunicación.
+Esta guía resume la estructura actual (Angular + Tauri), el flujo de la aplicación y las prácticas recomendadas. Todo se mantiene en castellano: código, comentarios y comunicación.
 
 ## Estructura del Repositorio
 
-- `index.html`: Página única con la UI y scripts por CDN.
-- `logic.js`: Orquestación y lógica de negocio (carga de CSV, agregaciones, tablas, gráficos, fetch de precios).
-- `persistence.js`: Capa de datos con SQL.js y snapshot en `localStorage`.
-- `portafolio-dividendos.csv`: Datos de ejemplo para pruebas locales.
-- `.env`: Variables locales (no subir a Git).
-- `.gitignore`: Exclusiones (incluye `.env` y artefactos locales).
-
-Nota: Proyecto plano sin build; todo vive en la raíz.
+- `frontend/`: aplicación Angular (componentes, servicios, estilos y tests). Ejecuta `npm install`, `npm start`, `ng build`, etc.
+- `src-tauri/`: proyecto Rust con la envoltura Tauri. Aquí se configuran ventanas, permisos y comandos previos al build.
+- `portafolio-*.csv`: datos de ejemplo para validar importaciones.
+- `.env`: variables locales (no subir).
+- `.gitignore`: exclusiones comunes (dist, node_modules, target, etc.).
 
 ## Flujo de la Aplicación
 
-1. Importar CSV desde la UI usando Papa Parse (`logic.js`).
-2. Persistir en memoria con SQL.js y snapshot a `localStorage` (`persistence.js`).
-3. Calcular agregaciones para posiciones, transferencias y dividendos (diario y por activo).
-4. Renderizar tablas y gráficos en `index.html` con Chart.js/DOM APIs.
-5. (Opcional) Obtener precios actuales por ticker, cuidando CORS/HTTPS.
+1. Los componentes de importación (`frontend/src/app/components/imports-view`) leen los CSV mediante Papa Parse.
+2. `DataService` (en `frontend/src/app/services/data.service.ts`) sanitiza filas, deduplica, convierte operaciones en flujos (STK/FX/OPT) y persiste en SQL.js (snapshot en `localStorage`).
+3. El servicio expone señales (`signal`) para trades, transferencias, dividendos y opciones. El resto de componentes se suscriben para renderizar tablas/gráficos.
+4. Las gráficas (cash, posiciones, primas de opciones) usan Chart.js y se alimentan de las agregaciones calculadas en el servicio.
+5. Las peticiones de precios (Alpha Vantage/Finnhub) también se orquestan desde `DataService`.
+6. Tauri solo envuelve la UI Angular por ahora; más adelante se moverá la lógica pesada a Python/Rust.
 
 ## Desarrollo Local
 
-- Servir como sitio estático:
-  - `python3 -m http.server 8000` y abrir `http://localhost:8000`.
-  - o `npx serve` en la raíz del repo.
-- No hay bundlers: dependencias por CDN en `index.html` (Chart.js, SQL.js, Papa Parse).
+1. Requisitos: Node 18+, npm, Rust (para Tauri) y `cargo`, además de `python3` disponible en el PATH (el backend de importación se ejecuta como script).
+2. Instalar dependencias frontend: `npm install` dentro de `frontend/` (también disponible como `just install_dev` desde la raíz).
+   - Si todavía no tienes la CLI nativa de Tauri, ejecuta `just install_tauri` (o `just install_all` para dejar todo listo). Requiere que Rust y `cargo` estén instalados.
+3. Servir la UI web: `npm start` en `frontend/` y abrir `http://localhost:4200/`.
+4. Backend FastAPI:
+   - Crear entorno: `uv venv backend/.venv` y `source backend/.venv/bin/activate && pip install -r backend/requirements.txt`.
+   - `just backend` lanza `uvicorn backend.api.main:app --reload` (útil para depurar solo el backend).
+   - **Tauri lo inicia automáticamente** al ejecutar `just dev` usando `backend/.venv/bin/python`. Si prefieres gestionarlo manualmente, exporta `PORTFOLIO_NO_BACKEND=1`.
+   - El servicio expone `http://127.0.0.1:8000` y respeta `PORTFOLIO_DB_PATH` para ubicar la base.
+5. Ejecutar el wrapper de escritorio: `cd src-tauri && cargo tauri dev` (o `just dev`). Este comando levanta `ng serve` automáticamente y abre la ventana Tauri.
+   - Las DevTools se abren desde el menú de la aplicación (por ejemplo, “Ver → Mostrar DevTools” en macOS o Windows).
+6. Build Angular standalone: `npm run build` dentro de `frontend/` (resulta en `frontend/dist/ng-portfolio`).
+7. Build binarios Tauri: `cd src-tauri && cargo tauri build`.
+   - Alternativa: con [`just`](https://github.com/casey/just) puedes ejecutar `just build`, que compila Angular y luego empaqueta Tauri de forma secuencial.
 
-## Dependencias (CDN)
+## Dependencias
 
-- Chart.js: gráficos.
-- SQL.js: SQLite en el navegador para consultas en memoria.
-- Papa Parse: parseo de CSV en el cliente.
+- Angular 17 (componentes standalone, Signals).
+- Chart.js para gráficos.
+- SQL.js para persistencia en memoria + snapshot (modo web).
+- Backend Python (FastAPI en `backend/api/main.py`) que expone endpoints REST para importar y listar datos. El frontend envía los CSV parseados como JSON.
+- Papa Parse para lectura de CSV (solo en el flujo legacy del navegador).
+- `@tauri-apps/api` para integrarse con Tauri (file dialog, invoke).
 
-Mantén versiones fijas en los enlaces CDN para evitar roturas inesperadas.
+Chart.js, SQL.js y Papa Parse siguen entrando vía CDN en `frontend/src/index.html`. Mantén versiones fijas.
 
 ## Estilo de Código
 
-- JavaScript: sangría de 2 espacios, `const/let`, `===`.
-- Funciones pequeñas y preferentemente puras.
-- Nombres: `camelCase` para variables/funciones; `PascalCase` para clases.
-- Separación: UI/orquestación en `logic.js`; almacenamiento/consultas en `persistence.js`.
-- Ficheros: minúsculas y descriptivos (p. ej. `charts.js`, `utils.js`).
+- TypeScript con sangría de 2 espacios.
+- `const`/`let`, `===`, funciones pequeñas/puras.
+- Componentes standalone, servicios inyectables y señales para estado reactivo.
+- Nombres `camelCase` para variables/funciones y `PascalCase` para clases/componentes.
+- Código y documentación siempre en castellano.
 
 ## Pruebas Manuales
 
-- Importar CSVs y revisar:
-  - Tablas de posiciones, transferencias y dividendos (diario/por activo).
-  - Gráfico de caja/flujo.
+- Importar CSVs de transferencias, operaciones y dividendos y comprobar:
+  - Tablas (posiciones, transferencias, dividendos).
+  - Gráficos de efectivo y primas de opciones.
 - Persistencia:
-  - Recargar y verificar que los datos se mantienen vía `persistence.js`.
-  - Limpiar estado con `localStorage.removeItem('portfolioDB')` en la consola.
-- Precios: probar algunos tickers y revisar CORS/HTTPS.
+  - Recargar la app (web o Tauri) y verificar que los datos siguen gracias al snapshot SQL.js.
+  - Reset: botón de la UI o `localStorage.removeItem('portfolioDB')`.
+- Precios: probar algunos tickers y confirmar refresco/avisos de error.
 
-No hay framework de tests por ahora.
+No hay framework de tests automatizados por ahora.
 
 ## Persistencia y Datos
 
-- Base en memoria (SQL.js) + snapshot en `localStorage` bajo la clave `portfolioDB`.
-- `portafolio-dividendos.csv` es solo para pruebas locales; no usar datos reales.
+- SQL.js sigue gestionando el estado en memoria cuando se trabaja desde el navegador puro.
+- En modo escritorio (o web) levantando el backend FastAPI se procesan todas las importaciones. Se guardan como lotes (`import_batches` + `import_rows`) y se actualizan las tablas normalizadas (`transfers`, `trades`) de SQLite.
+- Tras cada importación legacy también se serializa la DB a `localStorage` (`portfolioDB`) para mantener compatibilidad.
+- Las claves/API (Alpha/Finnhub) se guardan en `localStorage`.
 
 ## Seguridad y Configuración
 
-- No subir secretos ni datos personales. `.env` solo local.
-- Producción sobre HTTPS; ajustar CORS al añadir nuevas fuentes.
+- No comprometas secretos ni datos reales. `.env` es solo local.
+- Tauri usa HTTPS interno para cargar recursos de CDN. Mantén cuidado con CORS al añadir nuevas fuentes.
+- Producción: servir dist Angular sobre HTTPS o empaquetar con Tauri.
 
 ## Commits y Pull Requests
 
-- Commits: mensaje corto en presente imperativo. Ejemplos:
-  - "Add dividend import and tabs"
-  - "Permitir múltiples CSV de transferencias"
-  - "Registrar dividendos únicos por ActionID"
-- PRs:
-  - Propósito y cambios clave.
-  - Pasos de prueba (CSV usado) y capturas si hay cambios de UI.
-  - Enlazar issues y mantener alcance acotado.
+- Commits en presente imperativo y en castellano (p. ej. "Añadir importación de dividendos").
+- PRs: propósito, cambios clave, pasos de prueba (csv usado) y capturas si afecta a la UI. Alcance acotado.
 
 ## Extensiones y Nuevos Módulos
 
-- Nuevas utilidades: crear archivos descriptivos (p. ej. `utils.js`, `charts.js`) y cargarlos en `index.html`.
-- Nuevas fuentes de datos: funciones de fetch/parseo en `logic.js` y esquema/consultas en `persistence.js`.
-- Nuevos gráficos/tablas: preparar datasets en `logic.js` y renderizar con Chart.js/DOM.
+- Nuevos componentes Angular: crear carpeta en `frontend/src/app/components` y declararlos como standalone.
+- Nuevos servicios/utilidades: `frontend/src/app/services` o `frontend/src/app/utils`.
+- Integración nativa (Tauri): definir comandos en `src-tauri/src/main.rs` y consumirlos desde `@tauri-apps/api`.
 
 ## FAQ
 
 - ¿Cómo reseteo el estado?
-  - `localStorage.removeItem('portfolioDB')` y recargar.
-- ¿Dónde agrego una nueva columna?
-  - Actualiza el esquema en `persistence.js` y el parseo en `logic.js`.
-- ¿Cómo probar precios sin afectar producción?
-  - Usar fuente pública en HTTPS. Si requiere clave, guardarla en `.env` (no subir).
-
+  - Botón "Reset" o `localStorage.removeItem('portfolioDB')`.
+- ¿Dónde agrego una nueva columna o entidad?
+  - Actualiza el esquema en `DataService` + SQL.js y ajusta los componentes que consumen esos datos.
+- ¿Cómo ejecuto en escritorio?
+  - `npm --prefix frontend run tauri -- dev` para desarrollo o `npm --prefix frontend run tauri -- build` para binarios.
