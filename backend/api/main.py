@@ -29,6 +29,7 @@ except ImportError:
 from pydantic import BaseModel
 
 from db import ensure_schema, get_connection
+from prices import list_price_series, latest_prices_for_tickers, sync_prices_for_tickers
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 IMPORTER_PATH = BASE_DIR / 'importer.py'
@@ -103,8 +104,11 @@ def fetch_rows(query: str, columns: List[str]):
 class RowsPayload(BaseModel):
   rows: List[Dict[str, Any]]
 
+class TickersPayload(BaseModel):
+  tickers: List[str]
 
-logging.basicConfig(level=logging.INFO)
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 app = FastAPI(title='Portfolio Backend', version='0.1.0')
 app.add_middleware(
   CORSMiddleware,
@@ -178,6 +182,43 @@ def list_trades():
     ['trade_id', 'ticker', 'quantity', 'purchase', 'datetime', 'commission', 'commission_currency', 'currency', 'isin', 'asset_class']
   )
   return rows
+
+
+@app.post('/prices/sync')
+def sync_prices(payload: TickersPayload):
+  logging.info("VAmos a actualizar los precios")
+  if not payload.tickers:
+    raise HTTPException(status_code=400, detail='No se enviaron tickers para actualizar.')
+  ensure_db_ready()
+  conn = get_connection(str(get_db_path()))
+  try:
+    summary = sync_prices_for_tickers(conn, payload.tickers)
+  finally:
+    conn.close()
+  return {'status': 'ok', 'updated': summary}
+
+
+@app.post('/prices/latest')
+def latest_prices(payload: TickersPayload):
+  logging.info("VAmos a actualizar los precios latest")
+  if not payload.tickers:
+    return {}
+  ensure_db_ready()
+  conn = get_connection(str(get_db_path()))
+  try:
+    return latest_prices_for_tickers(conn, payload.tickers)
+  finally:
+    conn.close()
+
+
+@app.get('/prices/{ticker}')
+def prices_series(ticker: str):
+  ensure_db_ready()
+  conn = get_connection(str(get_db_path()))
+  try:
+    return list_price_series(conn, ticker)
+  finally:
+    conn.close()
 
 
 @app.get('/dividends')

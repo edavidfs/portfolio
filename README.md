@@ -31,7 +31,7 @@ La interfaz está construida con **Angular + Tailwind CSS** y muestra:
 4. Generar binarios Tauri: `cd src-tauri && cargo tauri build` (o `just build`, que primero ejecuta `npm run build` en `frontend/` y después empaqueta con Tauri). Desde la barra del sistema (menú “Ver → Mostrar DevTools”) puedes abrir las herramientas de desarrollo cuando estés en el wrapper de escritorio.
 5. Backend FastAPI (nuevo servicio):
    - Requisitos: [uv](https://github.com/astral-sh/uv) o Python 3.9+.
-   - Crear entorno: `uv venv backend/.venv` y luego `source backend/.venv/bin/activate && pip install -r backend/requirements.txt`.
+   - Crear entorno: desde la carpeta `backend/` ejecuta `uv venv .venv && source .venv/bin/activate && pip install -r requirements.txt`. Si prefieres trabajar solo con `uv`, también puedes usar el `pyproject.toml` incluyendo `uv sync`. (La receta `just install_backend` automatiza estos pasos).
    - (Opcional) Ejecutar servidor manualmente: `just backend` (o `uvicorn backend.api.main:app --reload`). **Nota:** Tauri lo arranca automáticamente al lanzar `just dev`, reutilizando `backend/.venv/bin/python`. Si no quieres ese comportamiento, exporta `PORTFOLIO_NO_BACKEND=1`.
    - Por defecto escucha en `http://127.0.0.1:8000`. Puedes sobrescribir la URL en el frontend definiendo `window.__PORTFOLIO_API__ = 'http://...'` antes de bootstrappedar Angular. La base SQLite se guarda en el directorio de datos del usuario (ej. `~/Library/Application Support/com.portfolio.desktop/portfolio.db`). Para forzar otra ruta, exporta `PORTFOLIO_DB_PATH=/ruta/portfolio.db` antes de arrancar el backend.
 
@@ -129,17 +129,23 @@ Cuando el CSV de operaciones incluya cambios de divisa (símbolos tipo `EUR.USD`
 
 ## Persistencia y Reset
 
-- Almacenamiento local: los datos se guardan en `localStorage` bajo la clave `portfolioDB` como snapshot de SQL.js.
-- Esquema: `persistence.js` gestiona la creación y migración de tablas y persiste tras cada importación.
-- Reset: el botón “Reset (borrar datos locales)” borra el snapshot y recarga la página. Manualmente, también puedes
-  ejecutar `localStorage.removeItem('portfolioDB')` en la consola del navegador.
-- Privacidad: la app no sube información a ningún servidor; todo ocurre en tu navegador.
+- Base de datos: todos los datos (transferencias, operaciones, dividendos y precios) se guardan en SQLite (`portfolio.db`)
+  dentro del directorio de datos del usuario (`~/Library/Application Support/com.portfolio.desktop/` en macOS).
+- El backend expone endpoints (`/import/*`, `/trades`, `/transfers`, `/dividends`, `/prices/*`) que manipulan esa base.
+  Cada importación queda registrada en `import_batches` / `import_rows` para facilitar auditoría.
+- Reset: el botón “Borrar base de datos” le pide al backend FastAPI que elimine el fichero SQLite y el log asociado.
+  Tras borrar se vuelve a sincronizar la UI, por lo que todas las tablas quedan vacías.
+- Privacidad: la app no sube la información a servicios externos; solo se ejecuta en tu máquina.
 
 ## Precios y conectividad
 
-- Fuente de precios: se consultan cotizaciones actuales desde Yahoo Finance. Requiere conexión a Internet.
-- Fallos de red/CORS: si no se puede obtener el precio de un ticker, se muestra un aviso y se usa `0` temporalmente.
-- Cache: los precios se piden en lote por los tickers en cartera en cada refresco de posiciones.
+- Fuente de precios: el backend FastAPI descarga los cierres diarios desde Yahoo Finance (`query1.finance.yahoo.com`),
+  los almacena en la tabla `prices` y marca el día en curso como “provisional” hasta que cierre oficialmente.
+- Sincronización: cada vez que importas operaciones o pulsas “Actualizar precios” el frontend pide al backend que
+  refresque todos los tickers en cartera. Los gráficos y tablas consultan `/prices/{ticker}` para dibujar el histórico
+  y `/prices/latest` para obtener el último cierre antes de calcular el valor de cada posición.
+- Requisitos: se necesita conexión a Internet; si Yahoo no devuelve datos para un ticker se muestra un aviso y se
+  conserva el último cierre almacenado.
 
 ## Monedas y FX
 

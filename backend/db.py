@@ -47,6 +47,18 @@ CREATE TABLE IF NOT EXISTS trades (
 CREATE INDEX IF NOT EXISTS idx_trades_ticker ON trades(ticker);
 CREATE INDEX IF NOT EXISTS idx_trades_datetime ON trades(datetime);
 
+CREATE TABLE IF NOT EXISTS prices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticker TEXT NOT NULL,
+  date TEXT NOT NULL,
+  close REAL NOT NULL,
+  provisional INTEGER DEFAULT 0,
+  UNIQUE(ticker, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_prices_ticker ON prices(ticker);
+CREATE INDEX IF NOT EXISTS idx_prices_date ON prices(date);
+
 CREATE TABLE IF NOT EXISTS dividends (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   action_id TEXT NOT NULL UNIQUE,

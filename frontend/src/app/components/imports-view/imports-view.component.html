@@ -15,29 +15,14 @@
     <label class="block text-sm font-medium mb-1">Dividendos</label>
     <input type="file" multiple (change)="onDividends($event)" class="block" />
   </div>
-  <div class="pt-4 border-t"></div>
-  <div class="space-y-2">
-    <h3 class="text-sm font-medium text-gray-700">Precios (Proveedor y claves)</h3>
-    <div class="flex items-center gap-3 text-sm">
-      <label>Proveedor:</label>
-      <select class="border rounded px-2 py-1" [value]="provider" (change)="provider = $any($event.target).value">
-        <option value="alpha">Alpha Vantage</option>
-        <option value="finnhub">Finnhub</option>
-      </select>
-      <button class="border rounded px-2 py-1" (click)="onSaveProvider()">Guardar proveedor</button>
+  <div class="pt-4 border-t">
+    <div class="flex items-center justify-between">
+      <div>
+        <h3 class="text-sm font-medium text-gray-700">Precios históricos</h3>
+        <p class="text-xs text-gray-500 max-w-md">Actualiza los precios diarios desde Yahoo Finance para todos los tickers presentes en operaciones y opciones.</p>
+      </div>
+      <button class="border rounded px-3 py-1.5 text-sm" (click)="onUpdatePrices()">Actualizar precios</button>
     </div>
-    <div class="flex items-center gap-2">
-      <input class="border rounded px-2 py-1 text-sm w-80" [value]="alphaKey" (input)="alphaKey = $any($event.target).value" placeholder="API Key de Alpha Vantage" />
-      <button class="border rounded px-2 py-1 text-sm" (click)="onSaveAlphaKey()">Guardar Alpha</button>
-    </div>
-    <div class="flex items-center gap-2">
-      <input class="border rounded px-2 py-1 text-sm w-80" [value]="finnhubKey" (input)="finnhubKey = $any($event.target).value" placeholder="API Key de Finnhub" />
-      <button class="border rounded px-2 py-1 text-sm" (click)="onSaveFinnhubKey()">Guardar Finnhub</button>
-    </div>
-    <div>
-      <button class="border rounded px-2 py-1 text-sm" (click)="onUpdatePrices()">Actualizar precios</button>
-    </div>
-    <p class="text-xs text-gray-500">Las claves y proveedor se guardan en tu navegador (localStorage). Respetamos los límites gratuitos (Alpha ~5/min, Finnhub 60/min).</p>
   </div>
 </div>
 

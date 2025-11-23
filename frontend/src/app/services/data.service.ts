@@ -28,9 +28,6 @@ export interface OptionRow {
   notional?: number;
 }
 
-interface PricePoint { date: number; close: number }
-const PRICE_PREFIX = 'portfolio_prices:';
-
 @Injectable({providedIn: 'root'})
 export class DataService {
   trades = signal<TradeRow[]>([]);
@@ -52,21 +49,8 @@ export class DataService {
   private transferIds = new Set<string>();
   private dividendIds = new Set<string>();
   private priceErrorShown = new Set<string>();
-  private alphaApiKey: string | null = null;
-  private finnhubApiKey: string | null = null;
-  private priceProvider: 'alpha' | 'finnhub' = 'alpha';
-  private finnhubSymbolMap: Record<string, string> = {};
 
-  constructor(private toast: ToastService) {
-    try {
-      this.alphaApiKey = localStorage.getItem('alphaVantageKey');
-      this.finnhubApiKey = localStorage.getItem('finnhubKey');
-      const prov = localStorage.getItem('priceProvider');
-      if (prov === 'finnhub' || prov === 'alpha') this.priceProvider = prov;
-      const map = localStorage.getItem('finnhubSymbolMap');
-      if (map) this.finnhubSymbolMap = JSON.parse(map);
-    } catch { }
-  }
+  constructor(private toast: ToastService) {}
 
   async init(){
     this.trades.set([]);
@@ -393,139 +377,99 @@ export class DataService {
     return map;
   }
 
-  // Precios con actualización incremental según proveedor
+  // Precios gestionados por el backend (Yahoo Finance)
   async fetchPricesBatch(tickers: string[]) {
-    const out: Record<string, number> = {} as any;
-    for (const t of tickers) {
-      out[t] = await this.fetchPrice(t);
-      if (this.priceProvider === 'finnhub') { await this.delay(1100); } // 60/min gratis
-    }
-    return out;
-  }
-  async fetchPrice(ticker:string){
+    const unique = this.normalizeTickers(tickers);
+    if (!unique.length) return {};
     try {
-      // Asegurar series actualizadas en DB y devolver el último cierre conocido
-      if (this.priceProvider === 'finnhub') await this.ensurePricesUpToDateFinnhub(ticker);
-      else await this.ensurePricesUpToDateAlpha(ticker);
-      const last = this.getLatestCloseFromCache(ticker);
-      return last ?? 0;
-    } catch (e) {
-      if (!this.priceErrorShown.has(ticker)) {
-        this.toast.error(`No se pudo obtener el precio para ${ticker}.`);
-        this.priceErrorShown.add(ticker);
+      await this.syncBackendPrices(unique);
+      const latest = await this.apiPost('/prices/latest', { tickers: unique });
+      this.priceErrorShown.delete('batch');
+      const out: Record<string, number> = {};
+      unique.forEach(t => {
+        const info = latest?.[t];
+        out[t] = (info && typeof info.close === 'number') ? info.close : 0;
+      });
+      return out;
+    } catch (error: any) {
+      console.error('fetchPricesBatch', error);
+      if (!this.priceErrorShown.has('batch')) {
+        this.toast.warning('No se pudieron obtener los precios desde el backend.');
+        this.priceErrorShown.add('batch');
       }
-      return 0;
+      return unique.reduce((acc, t) => { acc[t] = 0; return acc; }, {} as Record<string, number>);
     }
   }
 
-  // Configuración de proveedores y API keys (se guardan en localStorage)
-  setAlphaVantageKey(key: string) { this.alphaApiKey = key || null; try { if (key) localStorage.setItem('alphaVantageKey', key); else localStorage.removeItem('alphaVantageKey'); } catch { } }
-  getAlphaVantageKey() { return this.alphaApiKey; }
-  setFinnhubKey(key: string) { this.finnhubApiKey = key || null; try { if (key) localStorage.setItem('finnhubKey', key); else localStorage.removeItem('finnhubKey'); } catch { } }
-  getFinnhubKey() { return this.finnhubApiKey; }
-  setPriceProvider(provider: 'alpha' | 'finnhub') { this.priceProvider = provider; try { localStorage.setItem('priceProvider', provider); } catch { } }
-  getPriceProvider() { return this.priceProvider; }
-  private saveFinnhubMap() { try { localStorage.setItem('finnhubSymbolMap', JSON.stringify(this.finnhubSymbolMap)); } catch { } }
   async updateAllPrices() {
-    // Construir universo de tickers desde trades y opciones
     const trades = this.trades();
     const opts = this.options();
-    const set = new Set<string>();
-    trades.forEach(t => { if (t.Ticker) set.add(String(t.Ticker).toUpperCase()); });
-    opts.forEach(o => { if (o.underlying) set.add(String(o.underlying).toUpperCase()); });
-    const tickers = Array.from(set.values());
-    let addedTotal = 0;
-    for (const t of tickers) {
-      try {
-        const added = this.priceProvider === 'finnhub'
-          ? await this.ensurePricesUpToDateFinnhub(t)
-          : await this.ensurePricesUpToDateAlpha(t);
-        addedTotal += (added || 0);
-      } catch (err: any) {
-        this.toast.error(`${t}: error al actualizar precios.`);
-      }
-      if (this.priceProvider === 'finnhub') { await this.delay(1100); }
+    const tickers = this.normalizeTickers([
+      ...trades.map(t => t.Ticker || ''),
+      ...opts.map(o => o.underlying || '')
+    ]);
+    if (!tickers.length) {
+      this.toast.info('No hay tickers para actualizar.');
+      return { updated: 0, tickers: [] as string[] };
     }
-    this.toast.success(`Precios actualizados: ${addedTotal} registros nuevos (${tickers.length} tickers).`);
-    return { updated: addedTotal, tickers };
+    try {
+      const response = await this.syncBackendPrices(tickers);
+      const updatedMap = (response?.updated || {}) as Record<string, number>;
+      const total = Object.values(updatedMap).reduce((acc, val) => acc + (typeof val === 'number' ? val : 0), 0);
+      this.toast.success(`Precios actualizados desde Yahoo Finance (${tickers.length} tickers).`);
+      return { updated: total, tickers };
+    } catch (error:any) {
+      console.error('updateAllPrices', error);
+      const msg = typeof error === 'string' ? error : error?.message || 'No se pudieron actualizar los precios.';
+      this.toast.error(msg);
+      return { updated: 0, tickers };
+    }
   }
 
   async updatePricesForTicker(ticker: string) {
-    if (!ticker) return { updated: 0 };
+    const [normalized] = this.normalizeTickers([ticker]);
+    if (!normalized) return { updated: 0 };
     try {
-      const added = this.priceProvider === 'finnhub'
-        ? await this.ensurePricesUpToDateFinnhub(String(ticker).toUpperCase())
-        : await this.ensurePricesUpToDateAlpha(String(ticker).toUpperCase());
-      return { updated: added || 0 };
-    } catch (e) {
-      this.toast.error(`${ticker}: error al actualizar precios.`);
+      await this.syncBackendPrices([normalized]);
+      return { updated: 1 };
+    } catch (error:any) {
+      console.error('updatePricesForTicker', error);
+      const msg = typeof error === 'string' ? error : error?.message || `No se pudo actualizar ${normalized}.`;
+      this.toast.error(msg);
       return { updated: 0 };
     }
   }
 
-  // Persistencia ligera de precios en localStorage
-  private priceKey(ticker: string){
-    const symbol = String(ticker || '').toUpperCase();
-    return `${PRICE_PREFIX}${symbol}`;
-  }
-  private loadPriceSeries(ticker: string): PricePoint[]{
-    const key = this.priceKey(ticker);
+  async getPricesSeries(ticker: string): Promise<{ date: Date, close: number, provisional?: boolean }[]> {
+    const [normalized] = this.normalizeTickers([ticker]);
+    if (!normalized) return [];
     try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed
-        .map((row:any) => ({ date: Number(row.date) || 0, close: Number(row.close) || 0 }))
-        .filter(row => row.date > 0 && !isNaN(row.close))
-        .sort((a,b) => a.date - b.date);
-    } catch { return []; }
-  }
-  private savePriceSeries(ticker: string, rows: PricePoint[]){
-    const key = this.priceKey(ticker);
-    try { localStorage.setItem(key, JSON.stringify(rows)); } catch {}
-  }
-  private clearPriceCache(){
-    try {
-      const keys:string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(PRICE_PREFIX)) keys.push(key);
+      const rows = await this.apiGet(`/prices/${encodeURIComponent(normalized)}`);
+      this.priceErrorShown.delete(`series:${normalized}`);
+      if (!Array.isArray(rows)) return [];
+      return rows.map((row:any) => ({
+        date: new Date(row.date),
+        close: Number(row.close) || 0,
+        provisional: !!row.provisional
+      })).filter(item => !isNaN(item.date.getTime()));
+    } catch (error) {
+      console.error('getPricesSeries', error);
+      if (!this.priceErrorShown.has(`series:${normalized}`)) {
+        this.toast.warning(`No se pudieron obtener los precios de ${normalized}.`);
+        this.priceErrorShown.add(`series:${normalized}`);
       }
-      keys.forEach(k => localStorage.removeItem(k));
-    } catch {}
+      return [];
+    }
   }
-  private getLatestPriceDateFromCache(ticker: string): number | null {
-    const series = this.loadPriceSeries(ticker);
-    if (!series.length) return null;
-    return series[series.length - 1].date;
+
+  private normalizeTickers(list: string[]): string[] {
+    return Array.from(new Set((list || []).map(t => String(t || '').toUpperCase()).filter(Boolean)));
   }
-  private getLatestCloseFromCache(ticker: string): number | null {
-    const series = this.loadPriceSeries(ticker);
-    if (!series.length) return null;
-    return series[series.length - 1].close;
-  }
-  private addPricesToCache(ticker: string, rows: PricePoint[]){
-    if (!rows.length) return;
-    const current = this.loadPriceSeries(ticker);
-    const byDate = new Map<number, number>();
-    current.forEach(item => byDate.set(item.date, item.close));
-    rows.forEach(item => {
-      if (!item.date || isNaN(item.close)) return;
-      byDate.set(item.date, item.close);
-    });
-    const merged = Array.from(byDate.entries())
-      .map(([date, close]) => ({ date, close }))
-      .sort((a,b) => a.date - b.date);
-    this.savePriceSeries(ticker, merged);
-  }
-  async getPricesSeries(ticker: string): Promise<{ date: Date, close: number }[]> {
-    const rows = this.loadPriceSeries(ticker);
-    return rows.map(row => ({ date: new Date(row.date), close: row.close }));
-  }
-  getLatestPriceDate(ticker: string): Date | null {
-    const ms = this.getLatestPriceDateFromCache(ticker);
-    return ms ? new Date(ms) : null;
+
+  private async syncBackendPrices(tickers: string[]){
+    const unique = this.normalizeTickers(tickers);
+    if (!unique.length) return { updated: {} };
+    return this.apiPost('/prices/sync', { tickers: unique });
   }
 
   private extractUnderlyingFromSymbol(symbol:string){
@@ -562,7 +506,6 @@ export class DataService {
   // Reset de datos locales
   async resetBackendDb(){
     try {
-      console.log("Reset Backend DB")
       await this.apiPost('/reset');
       this.trades.set([]);
       this.transfers.set([]);
@@ -573,7 +516,6 @@ export class DataService {
       this.transferIds.clear();
       this.dividendIds.clear();
       this.priceErrorShown.clear();
-      this.clearPriceCache();
       await this.syncTransfersFromBackend();
       await this.syncTradesFromBackend();
       await this.syncDividendsFromBackend();
@@ -585,76 +527,6 @@ export class DataService {
     }
   }
 
-  // ====== Precios (Alpha Vantage / Finnhub)
-  private async ensurePricesUpToDateAlpha(ticker: string) {
-    const key = this.alphaApiKey;
-    if (!key) { if (!this.priceErrorShown.has('APIKEY')) { this.toast.info('Configura tu API Key de Alpha Vantage para actualizar precios.'); this.priceErrorShown.add('APIKEY'); } return 0; }
-    const lastDateMs = this.getLatestPriceDateFromCache(ticker);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    if (lastDateMs && lastDateMs >= today.getTime()) return 0; // ya está al día
-    this.toast.info(`Descargando precios de ${ticker} (Alpha Vantage)...`);
-    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(ticker)}&outputsize=compact&apikey=${encodeURIComponent(key)}`;
-    const resp = await fetch(url);
-    const json = await resp.json();
-    const series = json['Time Series (Daily)'] || json['Time Series Daily'] || {};
-    const rows: { date: number; close: number }[] = Object.keys(series).map(d => {
-      const o = series[d];
-      const close = parseFloat(o['5. adjusted close'] ?? o['4. close'] ?? '0') || 0;
-      const [y, m, dd] = d.split('-').map(n => parseInt(n, 10));
-      const ms = new Date(y, (m || 1) - 1, dd || 1).setHours(0, 0, 0, 0);
-      return { date: ms, close };
-    }).filter(r => r.close > 0)
-      .sort((a, b) => a.date - b.date);
-    const missing = lastDateMs ? rows.filter(r => r.date > lastDateMs) : rows;
-    this.addPricesToCache(ticker, missing);
-    if (missing.length > 0) this.toast.success(`${ticker}: ${missing.length} registros nuevos (Alpha).`);
-    else this.toast.info(`${ticker}: sin cambios (Alpha).`);
-    return missing.length;
-  }
-
-  private async ensurePricesUpToDateFinnhub(ticker: string) {
-    const key = this.finnhubApiKey;
-    if (!key) { if (!this.priceErrorShown.has('FINNAPIKEY')) { this.toast.info('Configura tu API Key de Finnhub para actualizar precios.'); this.priceErrorShown.add('FINNAPIKEY'); } return 0; }
-    const lastDateMs = this.getLatestPriceDateFromCache(ticker);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    if (lastDateMs && lastDateMs >= today.getTime()) return 0;
-    this.toast.info(`Descargando precios de ${ticker} (Finnhub Quote)...`);
-    const sym = await this.resolveFinnhubSymbol(ticker, key);
-    const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(key)}`;
-    const resp = await fetch(url);
-    const json = await resp.json();
-    if ((resp.status === 403) || (json && typeof json.error === 'string' && json.error.toLowerCase().includes("don't have access"))) {
-      this.toast.warning(`${ticker}: Finnhub denegó acceso a este recurso.`);
-      return 0;
-    }
-    const close = Number(json?.c || 0);
-    const tsSec = Number(json?.t || 0);
-    if (!close || !tsSec) { this.toast.info(`${ticker}: sin datos de Quote en Finnhub.`); return 0; }
-    const d = new Date(tsSec * 1000); d.setHours(0,0,0,0);
-    const row = { date: d.getTime(), close };
-    if (lastDateMs && row.date <= lastDateMs) { this.toast.info(`${ticker}: sin cambios (Finnhub Quote).`); return 0; }
-    this.addPricesToCache(ticker, [row]);
-    this.toast.success(`${ticker}: 1 registro nuevo (Finnhub Quote).`);
-    return 1;
-  }
-
-  private delay(ms: number) { return new Promise<void>(res => setTimeout(res, ms)); }
-  private normalizeTickerForSearch(t: string) { const up = String(t || '').toUpperCase(); return up.includes('.') ? up.split('.')[0] : up; }
-  private async resolveFinnhubSymbol(ticker: string, key: string): Promise<string> {
-    const t = String(ticker).toUpperCase();
-    if (this.finnhubSymbolMap[t]) return this.finnhubSymbolMap[t];
-    const q = this.normalizeTickerForSearch(t);
-    try {
-      const url = `https://finnhub.io/api/v1/search?q=${encodeURIComponent(q)}&token=${encodeURIComponent(key)}`;
-      const resp = await fetch(url);
-      const json = await resp.json();
-      const results = Array.isArray(json?.result) ? json.result : [];
-      let best: any = results.find((r: any) => String(r.symbol || '').toUpperCase() === q) || results.find((r: any) => String(r.symbol || '').toUpperCase().startsWith(q)) || results[0];
-      const sym = String(best?.symbol || q);
-      this.finnhubSymbolMap[t] = sym; this.saveFinnhubMap();
-      return sym;
-    } catch { return q; }
-  }
   private async syncTransfersFromBackend(){
     try {
       const remote = await this.apiGet('/transfers');

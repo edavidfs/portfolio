@@ -13,10 +13,6 @@ import { TooltipIconComponent } from '../tooltip-icon/tooltip-icon.component';
     <a routerLink="/" class="text-sm text-blue-700">← Volver</a>
     <div class="flex items-center justify-between">
       <h2 class="text-xl font-semibold">Detalle de {{ ticker }}</h2>
-      <button class="inline-flex items-center px-3 py-1.5 border text-sm rounded hover:bg-gray-100"
-              (click)="onUpdatePrices()" title="Forzar actualización de precios para este ticker">
-        Actualizar precios
-      </button>
     </div>
     
     <div class="container mx-auto">
@@ -337,7 +333,7 @@ export class TickerDetailComponent implements OnInit, OnDestroy {
 
   private async drawDailyValueChart(){
     const prices = await this.data.getPricesSeries(this.ticker);
-    const last = this.data.getLatestPriceDate(this.ticker);
+    const last = prices.length ? prices[prices.length - 1].date : null;
     this.summary.lastPriceDate = last || null;
     if (!prices.length) { if (this.valueChart) { this.valueChart.destroy(); this.valueChart = null; } this.roiBasePct = 0; this.roiStkPct = 0; return; }
     // Cantidad diaria acumulada por fecha
@@ -397,7 +393,7 @@ export class TickerDetailComponent implements OnInit, OnDestroy {
     const datasets:any[] = [];
     const canvas:any = document.getElementById('tickerValueChart'); if (!canvas) return; const ctx = canvas.getContext('2d');
     const prices = await this.data.getPricesSeries(this.ticker);
-    const last = this.data.getLatestPriceDate(this.ticker);
+    const last = prices.length ? prices[prices.length - 1].date : null;
     this.summary.lastPriceDate = last || null;
     // Cantidad diaria acumulada para valor y drawdown
     const events: Record<string, number> = {};

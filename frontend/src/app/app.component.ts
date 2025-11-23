@@ -22,6 +22,7 @@ export class AppComponent {
   isDetail = signal<boolean>(false);
   constructor(){
     this.data.init();
+    this.isDetail.set(this.router.url.startsWith('/ticker/'));
     this.router.events.subscribe(ev => {
       if (ev instanceof NavigationEnd) {
         this.isDetail.set(this.router.url.startsWith('/ticker/'));

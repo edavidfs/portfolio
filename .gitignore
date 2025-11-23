@@ -6,7 +6,7 @@ bazel-out/
 
 # --- Dependencias
 **/node_modules/
-backend/__pycache__/
+backend/__pycache__/*
 backend/.venv/
 backend/.uv-cache/
 backend/portfolio.db

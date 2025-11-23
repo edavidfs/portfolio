@@ -28,4 +28,9 @@ install_tauri:
     cargo install tauri-cli --locked
 
 # Instala todo el entorno (frontend + CLI Tauri).
-install_all: install_dev install_tauri
+install_all: install_dev install_backend install_tauri
+
+# Instala los requirements del backend usando uv (crea .venv si no existe).
+install_backend:
+    (cd backend && uv --no-config venv .venv)
+    (cd backend && uv --no-config sync)

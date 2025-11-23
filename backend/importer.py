@@ -236,9 +236,9 @@ def main():
   log_path = Path(args.log) if args.log else None
   if log_path:
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(filename=str(log_path), level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+    logging.basicConfig(filename=str(log_path), level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
   else:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
   conn = get_connection(str(db_path))
   ensure_schema(conn)
   if args.init_only:
