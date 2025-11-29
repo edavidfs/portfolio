@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS transfers (
   currency TEXT NOT NULL,
   datetime TEXT NOT NULL,
   amount REAL NOT NULL,
+  origin TEXT DEFAULT 'externo',
+  kind TEXT DEFAULT 'desconocido',
   raw_json TEXT
 );
 
@@ -74,6 +76,22 @@ CREATE TABLE IF NOT EXISTS dividends (
 
 CREATE INDEX IF NOT EXISTS idx_dividends_currency ON dividends(currency);
 CREATE INDEX IF NOT EXISTS idx_dividends_datetime ON dividends(datetime);
+
+CREATE TABLE IF NOT EXISTS app_config (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS fx_rates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  base_currency TEXT NOT NULL,
+  quote_currency TEXT NOT NULL,
+  date TEXT NOT NULL,
+  rate REAL NOT NULL,
+  UNIQUE(base_currency, quote_currency, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fx_base_quote ON fx_rates(base_currency, quote_currency);
 """
 
 
@@ -87,4 +105,23 @@ def get_connection(db_path: str) -> sqlite3.Connection:
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
   conn.executescript(SCHEMA)
+  # Migraciones ligeras: asegurar columnas origin/kind en transfers
+  cur = conn.execute("PRAGMA table_info(transfers);")
+  cols = {row[1] for row in cur.fetchall()}
+  if "origin" not in cols:
+    conn.execute("ALTER TABLE transfers ADD COLUMN origin TEXT DEFAULT 'externo';")
+  if "kind" not in cols:
+    conn.execute("ALTER TABLE transfers ADD COLUMN kind TEXT DEFAULT 'desconocido';")
+  # Asegurar tabla fx_rates (idempotente)
+  conn.execute("""
+  CREATE TABLE IF NOT EXISTS fx_rates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    base_currency TEXT NOT NULL,
+    quote_currency TEXT NOT NULL,
+    date TEXT NOT NULL,
+    rate REAL NOT NULL,
+    UNIQUE(base_currency, quote_currency, date)
+  );
+  """)
+  conn.execute("CREATE INDEX IF NOT EXISTS idx_fx_base_quote ON fx_rates(base_currency, quote_currency);")
   conn.commit()

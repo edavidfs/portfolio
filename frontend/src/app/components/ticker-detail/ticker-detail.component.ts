@@ -95,8 +95,8 @@ import { TooltipIconComponent } from '../tooltip-icon/tooltip-icon.component';
       </div>
       <div class="bg-white rounded border p-3 relative">
         <app-tooltip-icon text="Último día con precio almacenado en la base local"></app-tooltip-icon>
-        <div class="text-xs text-gray-500">Último día con precio</div>
-        <div class="text-lg font-medium">{{ summary.lastPriceDate ? (summary.lastPriceDate | date:'shortDate') : '-' }}</div>
+      <div class="text-xs text-gray-500">Último día con precio</div>
+        <div class="text-lg font-medium">{{ summary.lastPriceDate ? (summary.lastPriceDate | date:'dd/MM/yyyy') : '-' }}</div>
       </div>
     </div>
 
@@ -114,7 +114,7 @@ import { TooltipIconComponent } from '../tooltip-icon/tooltip-icon.component';
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           <tr *ngFor="let r of tradeRows">
-            <td class="px-3 py-1">{{ r.DateTime ? (r.DateTime | date:'short') : '' }}</td>
+            <td class="px-3 py-1">{{ r.DateTime ? (r.DateTime | date:'dd/MM/yyyy HH:mm') : '' }}</td>
             <td class="px-3 py-1">{{ (r.Quantity || 0) >= 0 ? 'Compra' : 'Venta' }}</td>
             <td class="px-3 py-1">{{ r.Quantity | number:'1.0-2' }}</td>
             <td class="px-3 py-1">{{ r.PurchasePrice | number:'1.2-2' }}</td>
@@ -137,7 +137,7 @@ import { TooltipIconComponent } from '../tooltip-icon/tooltip-icon.component';
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           <tr *ngFor="let d of dividendRows">
-            <td class="px-3 py-1">{{ d.DateTime | date:'shortDate' }}</td>
+            <td class="px-3 py-1">{{ d.DateTime | date:'dd/MM/yyyy' }}</td>
             <td class="px-3 py-1">{{ d.Amount | number:'1.2-2' }}</td>
             <td class="px-3 py-1">{{ d.CurrencyPrimary }}</td>
             <td class="px-3 py-1">{{ d.Tax | number:'1.2-2' }}</td>
@@ -193,7 +193,7 @@ import { TooltipIconComponent } from '../tooltip-icon/tooltip-icon.component';
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           <tr *ngFor="let o of optionRows">
-            <td class="px-3 py-1">{{ o.DateTime | date:'short' }}</td>
+            <td class="px-3 py-1">{{ o.DateTime | date:'dd/MM/yyyy HH:mm' }}</td>
             <td class="px-3 py-1">{{ o.symbol }}</td>
             <td class="px-3 py-1">{{ o.optType || '-' }}</td>
             <td class="px-3 py-1">{{ (o.strike || 0) | number:'1.2-2' }}</td>

@@ -27,6 +27,23 @@ Propósito: guiar la definición y construcción de la interfaz en Angular para 
 - `imports-panel`: inputs: `fileTypes`, `history[]`; outputs: `onUpload(type,file)`.
 - `settings-form`: inputs: `defaults`; outputs: `onSave`, `onCancel`.
 
+## Implementación del dashboard (alineado con **REQ-UI-0009**, **REQ-UI-0010**, **REQ-UI-0011**)
+- Estructura:
+  - Bloque superior: gráfica principal (valor del portafolio) con toggles para mostrar aportes/retiros y % beneficio/pérdida como series adicionales (**REQ-UI-0009**).
+  - Bloque intermedio: selector de intervalo debajo de la gráfica (rangos rápidos + rango libre) que actualiza gráfica y KPIs (**REQ-UI-0010**).
+  - Bloque inferior: grilla de cajas/tablas con métricas de flujos y PnL (beneficio, beneficio %, transferencias netas, dividendos, PnL de opciones, intereses pagados) (**REQ-UI-0011**).
+- Componentes sugeridos:
+  - `portfolio-chart`: inputs `series[]`, `transfersSeries?`, `pnlPctSeries?`, flags `showTransfers`, `showPnlPct`, `loading`; outputs `onRangeSelect`.
+  - `range-selector`: inputs `currentRange`, `quickRanges`; output `onRangeChange`.
+  - `flow-kpi-grid`: inputs `benefit`, `benefitPct`, `transfersNet`, `dividends`, `optionsPnl`, `interestPaid`, `loading`.
+- Interacción:
+  - Cambiar rango en `range-selector` dispara recálculo y actualiza `portfolio-chart` y `flow-kpi-grid` (consistencia con **REQ-UI-0002** y **REQ-TR-0001**).
+  - Toggles en `portfolio-chart` muestran/ocultan curvas sin recarga completa.
+- Estados:
+  - Loading: skeleton en gráfico y tarjetas de KPIs.
+  - Error: banner con retry; vacío: CTA para importar CSV/seleccionar rango válido.
+  - Desactualizado: badge si las series o precios están fuera de umbral.
+
 ## Requerimientos del dashboard (A-UI con A-PO/A-TR)
 - KPIs: valor de cartera, TWR del rango, volatilidad anualizada, drawdown máximo/actual, Sharpe y Sortino (tasa libre configurable), PnL realizado/no realizado, dividendos del periodo.
 - Benchmark: mostrar retorno y curva del benchmark elegido en paralelo a la cartera.

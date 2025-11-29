@@ -35,31 +35,38 @@
 - Revisar CORS entre backend y frontend/Tauri; servir sobre HTTPS en producción.
 - Variables útiles: `PORTFOLIO_DB_PATH` para ruta de la base local; usa rutas de datos en `user_data_dir` por defecto.
 
+## 2. Lista de agentes
+
+Esta sección define los agentes conceptuales. Algunos serán **humanos**, otros serán **agentes de diseño** (que usan Codex) y otros podrán mapearse a **módulos de software**.
+
+1. A-PO: Product Owner & Domain Expert: define alcance y roadmap; entregables: backlog priorizado y criterios de aceptación por iteración.
+2. A-REQ: Gestión de Requisitos
+3. A-AR: Arquitectura de Sistema: contratos API, eventos y límites entre Angular, backend y Tauri; entregables: especificaciones de endpoints, diagramas simples y convenciones de estado/errores.
+4. A-DB: Modelado de Datos & Persistencia: modelo de datos, importadores, endpoints y sincronización de precios; entregables: esquemas, validación/idempotencia y logs/alertas básicas.
+5. A-UI: Interfaz de Usuario Angular & UX: componentes, tablas y gráficas; entregables: vistas responsivas, manejo de errores y estados vacíos/cargando, accesibilidad básica.
+6. A-TR: Trading/Estadística : métricas (rendimientos, drawdown, riesgo) y señales ligeras/backtests acotados; entregables: cálculos verificables y endpoints/servicios para consumo en UI.
+7. A-TA: Integración (Tauri/Rust): permisos de filesystem/red, empaquetado y puente a backend; entregables: configuración Tauri, manejo de rutas locales y actualización de la app.
+8. A-QA: Calidad, Métricas & DevOps: scripts de entorno, lint/format, chequeos manuales con CSV de muestra y checklist de regresiones; entregables: scripts de arranque, guías de prueba y reporte de hallazgos.
+9. A-ORCH: Orquestador de Agentes
+10. A-CODEX: Implementación de Código
+
+
 ## Instrucciones para Agentes
 - Escribir siempre en castellano: código, comentarios, mensajes de commit y PRs.
-- Siglas sugeridas (prefijo `A-`): Producto/MVP (`A-PO`), Arquitectura (`A-AR`), Datos/Backend (`A-DB`), UI/UX (`A-UI`), Trading/Estadística (`A-TR`), Integración Tauri (`A-TA`), DevOps/Calidad (`A-QA`).
-- Roles sugeridos (responsabilidades y entregables):
-  - **Producto/MVP (A-PO)**: define alcance y roadmap; entregables: backlog priorizado y criterios de aceptación por iteración.
-  - **Arquitectura (A-AR)**: contratos API, eventos y límites entre Angular, backend y Tauri; entregables: especificaciones de endpoints, diagramas simples y convenciones de estado/errores.
-  - **Datos/Backend (Python) (A-DB)**: modelo de datos, importadores, endpoints y sincronización de precios; entregables: esquemas, validación/idempotencia y logs/alertas básicas.
-  - **UI/UX (Angular) (A-UI)**: componentes, tablas y gráficas; entregables: vistas responsivas, manejo de errores y estados vacíos/cargando, accesibilidad básica.
-  - **Trading/Estadística (A-TR)**: métricas (rendimientos, drawdown, riesgo) y señales ligeras/backtests acotados; entregables: cálculos verificables y endpoints/servicios para consumo en UI.
-  - **Integración (Tauri/Rust) (A-TA)**: permisos de filesystem/red, empaquetado y puente a backend; entregables: configuración Tauri, manejo de rutas locales y actualización de la app.
-  - **DevOps/Calidad (A-QA)**: scripts de entorno, lint/format, chequeos manuales con CSV de muestra y checklist de regresiones; entregables: scripts de arranque, guías de prueba y reporte de hallazgos.
+- Siglas sugeridas (prefijo `A-`): Producto/MVP (`A-PO`), Requisitos (`A-RQ`)Arquitectura (`A-AR`), Datos/Backend (`A-DB`), UI/UX (`A-UI`), Trading/Estadística (`A-TR`), Integración Tauri (`A-TA`), DevOps/Calidad (`A-QA`).
+
 
 ## Referencias de requerimientos
+
+## Repositorio de requisitos
+
+- Fuente canónica: `docs/requirements.csv` (CSV en UTF-8 dentro de `docs/`).
+- Campos obligatorios (coinciden con encabezados del CSV): `id,tipo,estado,prioridad,titulo,descripcion,racional,verificacion,criterios,trazabilidad`.
+- Convención de IDs: `REQ-XX-####` según áreas definidas arriba; cualquier referencia en código/tests debe usar estos IDs.
+- Flujo: añade/edita filas en el CSV, mantén los criterios de verificación y trazabilidad en castellano y sincronízalo con los documentos/agentes que dependan de él.
 - Cada requerimiento debe tener código `REQ-XX-####` donde `XX` es el área y `####` un número secuencial por área.
 - Áreas sugeridas: UI (interfaz Angular/Tauri), TR (trading/estadística), BK (backend Python/API), AR (arquitectura/contratos), PO (producto/negocio), QA (pruebas/validación), TA (cliente Tauri).
 - Ejemplo: `REQ-UI-0001` para un requisito de dashboard; `REQ-TR-0003` para una métrica de riesgo; `REQ-BK-0005` para un endpoint.
-- Campos mínimos por requisito (formato ECSS simplificado):
-  - ID, título breve, tipo (Funcional, No funcional, Integración).
-  - Declaración (1-2 frases, sin conjunciones múltiples).
-  - Racional (por qué importa) y fuente/norma.
-  - Prioridad (Alta/Media/Baja) y estado.
-  - Método(s) de verificación: I/A/T/D (Inspección/Análisis/Prueba/Demostración).
-  - Criterios de aceptación medibles.
-  - Trazabilidad: Padres/Hijos/Objetivo y relaciones clave (REQ ↔ VV ↔ DOC).
-- Estilo: mostrar el ID en negrita en la documentación (ej. `**REQ-UI-0001** (Tipo: ...)`).
 
 ## Metodología de trabajo (TDD)
 - Default: aplicar TDD en backend Python, servicios Angular y utilidades Rust. Cada cambio de lógica debe ir con prueba unitaria o de integración que falle antes y pase después.

@@ -65,7 +65,44 @@ Chart.js, SQL.js y Papa Parse siguen entrando vía CDN en `frontend/src/index.ht
   - Reset: botón de la UI o `localStorage.removeItem('portfolioDB')`.
 - Precios: probar algunos tickers y confirmar refresco/avisos de error.
 
-No hay framework de tests automatizados por ahora.
+Además de las pruebas manuales, hay tests automatizados en backend (pytest) y frontend (Karma/Jasmine).
+
+## Convención de trazabilidad en tests
+
+- Cada test automatizado (unitario, integración o e2e) debe incluir un comentario indicando el requisito que pretende cubrir, usando el ID definido en `docs/requirements.md` (ej. `// Cobertura: REQ-UI-0017` o `# Cobertura: REQ-BK-0006`).
+- Si un caso cubre varios requisitos, enuméralos en el mismo comentario.
+- Coloca el comentario junto al `describe`/`it` (JS/TS) o al `def test_*` (Python) para facilitar la búsqueda.
+
+## Guía rápida de pruebas (backend y frontend)
+
+- **Backend (pytest + FastAPI TestClient)**
+  - Ruta: `backend/tests/`.
+  - Ejecutar todo: `just test_backend`. Individual: `cd backend && source .venv/bin/activate && pytest tests/test_portfolio_value.py::test_portfolio_value_series_monthly`.
+  - Prácticas: usar DB temporal (env `PORTFOLIO_DB_PATH`), poblar `fx_rates` y fixtures mínimas, validar conversiones en moneda base, añadir comentario de cobertura en cada `def test_*`.
+
+- **Frontend (Karma + Jasmine, Angular 17)**
+  - Ruta: `frontend/src/**/*.spec.ts`.
+  - Ejecutar: `just test_frontend` o `cd frontend && npm test -- --watch=false --browsers=ChromeHeadless`.
+  - Prácticas: comentario de cobertura en `describe`/`it`, usar espías de `fetch` en servicios, tests de utilidades para series/moneda base, sin dependencias de red.
+
+- **Checklist al crear tests**
+  - Comentario de cobertura con IDs de requisito.
+  - Datos realistas y mínimos (fechas ISO, divisas en mayúsculas).
+  - Verificaciones en moneda base cuando aplique.
+  - Sin llamadas de red reales; usar fixtures o mocks.
+  - Si se usan FX, poblar `fx_rates` para el rango necesario.
+
+### Formato de documentación de cobertura
+
+- En Python (pytest): usa docstrings sobre cada `def test_*` con el prefijo `Cobertura: <REQ-ID>` y una frase breve del objetivo. Ejemplo:
+  ```python
+  def test_algo():
+    \"\"\"
+    Cobertura: REQ-BK-0006
+    Verifica serie mensual agregada en moneda base.
+    \"\"\"
+  ```
+- En JS/TS (Jasmine/Karma): comenta junto al `describe`/`it` usando `// Cobertura: <REQ-ID>`.
 
 ## Persistencia y Datos
 

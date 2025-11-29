@@ -34,6 +34,10 @@ export class DataService {
   transfers = signal<TransferRow[]>([]);
   dividends = signal<DividendRow[]>([]);
   options = signal<OptionRow[]>([]);
+  baseCurrency = signal<string>('USD');
+  serviceChecking = signal<boolean>(false);
+  serviceAvailable = signal<boolean>(false);
+  serviceError = signal<string>('');
   private apiBase = (() => {
     if (typeof window !== 'undefined') {
       const w = window as any;
@@ -52,15 +56,51 @@ export class DataService {
 
   constructor(private toast: ToastService) {}
 
+  async checkHealth(): Promise<{ ok: boolean; message?: string }> {
+    try {
+      const res = await fetch(`${this.apiBase}/health`);
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        return { ok: false, message: detail || res.statusText || 'Error en /health' };
+      }
+      return { ok: true };
+    } catch (err: any) {
+      return { ok: false, message: err?.message || 'No se pudo conectar al backend' };
+    }
+  }
+
   async init(){
+    this.serviceChecking.set(true);
+    this.serviceError.set('');
+    this.serviceAvailable.set(false);
+    const health = await this.checkHealth();
+    if (!health.ok) {
+      this.serviceChecking.set(false);
+      this.serviceError.set(health.message || 'No se pudo conectar con el backend');
+      return;
+    }
+    this.serviceAvailable.set(true);
+    try {
+      await this.loadInitialData();
+    } catch (err: any) {
+      this.serviceAvailable.set(false);
+      this.serviceError.set(err?.message || 'Error al inicializar datos');
+    } finally {
+      this.serviceChecking.set(false);
+    }
+  }
+
+  private async loadInitialData(){
     this.trades.set([]);
     this.transfers.set([]);
     this.dividends.set([]);
     this.options.set([]);
+    this.baseCurrency.set('USD');
     this.tradeKeys.clear();
     this.tradeIds.clear();
     this.transferIds.clear();
     this.dividendIds.clear();
+    await this.loadConfig();
     await this.syncTransfersFromBackend();
     await this.syncTradesFromBackend();
     await this.syncDividendsFromBackend();
@@ -382,7 +422,7 @@ export class DataService {
     const unique = this.normalizeTickers(tickers);
     if (!unique.length) return {};
     try {
-      await this.syncBackendPrices(unique);
+      // Usar precios ya disponibles en backend sin forzar sincronización para evitar bloqueos en la UI
       const latest = await this.apiPost('/prices/latest', { tickers: unique });
       this.priceErrorShown.delete('batch');
       const out: Record<string, number> = {};
@@ -539,7 +579,9 @@ export class DataService {
         TransactionID: String(item.transaction_id || item.transactionId || ''),
         CurrencyPrimary: String(item.currency || '').toUpperCase(),
         DateTime: item.datetime ? new Date(item.datetime) : new Date(),
-        Amount: Number(item.amount) || 0
+        Amount: Number(item.amount) || 0,
+        origin: (item.origin || 'externo'),
+        kind: (item.kind || 'desconocido')
       })).filter(r => r.TransactionID && r.CurrencyPrimary);
       if (!mapped.length) return;
       this.transfers.set(mapped);
@@ -609,6 +651,63 @@ export class DataService {
       console.error('importTradesToBackend', error);
       this.toast.warning('No se pudo guardar las operaciones en el backend.');
     }
+  }
+
+  async loadConfig(): Promise<{ baseCurrency: string }> {
+    try {
+      const cfg = await this.apiGet('/config');
+      const cur = (cfg?.base_currency || cfg?.baseCurrency || 'USD').toString().toUpperCase();
+      this.baseCurrency.set(cur);
+      return { baseCurrency: cur };
+    } catch (error) {
+      console.error('loadConfig', error);
+      return { baseCurrency: this.baseCurrency() };
+    }
+  }
+
+  async updateBaseCurrency(currency: string) {
+    const cur = (currency || '').toUpperCase().trim();
+    if (!cur) return;
+    await this.apiPost('/config/base-currency', { currency: cur });
+    this.baseCurrency.set(cur);
+    this.toast.success(`Moneda base actualizada a ${cur}`);
+  }
+
+  async syncFx(currencies?: string[]) {
+    const clean = currencies ? Array.from(new Set((currencies || []).map(c => c.toUpperCase()).filter(Boolean))) : [];
+    try {
+      const res = await this.apiPost('/fx/sync', { tickers: clean });
+      const synced = res?.updated ? Object.keys(res.updated).join(', ') : (clean.length ? clean.join(', ') : 'auto');
+      this.toast.success(`FX sincronizado (${synced})`);
+      return res;
+    } catch (error:any) {
+      console.error('syncFx', error);
+      this.toast.error(error?.message || 'No se pudo sincronizar FX.');
+    }
+  }
+
+  async getNetTransfers(range?: { from?: string; to?: string }) {
+    const params = new URLSearchParams();
+    if (range?.from) params.set('from_date', range.from);
+    if (range?.to) params.set('to_date', range.to);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.apiGet(`/cash/net-transfers${query}`);
+  }
+
+  async getPortfolioValueSeries(interval: 'day'|'week'|'month'|'quarter'|'year' = 'day', base?: string) {
+    const params = new URLSearchParams({ interval });
+    if (base) params.set('base', base.toUpperCase());
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await this.apiGet(`/portfolio/value/series${query}`);
+    const series = Array.isArray(res?.series) ? res.series : [];
+    return series
+      .map((item:any) => ({
+        date: new Date(item.date),
+        value: Number(item.value_base) || 0,
+        transfers: Number(item.transfers_base) || 0,
+        pnlPct: Number(item.pnl_pct) || 0
+      }))
+      .filter(item => !isNaN(item.date.getTime()));
   }
 
   private async apiGet(path: string){

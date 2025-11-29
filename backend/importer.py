@@ -121,6 +121,27 @@ def extract_action_id(row: Dict[str, Any]):
   return None
 
 
+def classify_transfer(row: Dict[str, Any], tx_id: str) -> Tuple[str, str]:
+  tx_upper = (tx_id or "").upper()
+  # Prefijos conocidos para ignorar operaciones o FX internos
+  if tx_upper.startswith("FX:"):
+    return "fx_interno", "mov_interno"
+  if tx_upper.startswith("STK:") or tx_upper.startswith("OPT:"):
+    return "operacion", "operacion"
+  # Revisar campos de Asset/AssetClass
+  asset_class = str(row.get("AssetClass") or row.get("Asset") or row.get("assetClass") or "").upper()
+  if asset_class in {"STK", "OPT"}:
+    return "operacion", "operacion"
+  # Descripción
+  activity = str(row.get("ActivityDescription") or row.get("Description") or "").upper()
+  if "FX" in activity and "TRANSFER" in activity:
+    return "fx_interno", "mov_interno"
+  # Por defecto, externo. Tipo según signo
+  amount = parse_float(row.get("Amount")) or 0
+  kind = "deposito" if amount > 0 else "retiro"
+  return "externo", kind
+
+
 def upsert_transfer(conn, row: Dict[str, Any]) -> bool:
   tx_id = extract_transaction_id(row)
   if not tx_id:
@@ -134,11 +155,15 @@ def upsert_transfer(conn, row: Dict[str, Any]) -> bool:
   amount = parse_float(row.get("Amount"))
   if amount is None:
     return False
+  origin, kind = classify_transfer(row, tx_id)
+  if origin == "operacion":
+    # No se guardan flujos de operaciones en transfers
+    return False
   before = conn.total_changes
   conn.execute(
-    """INSERT OR IGNORE INTO transfers (transaction_id, currency, datetime, amount, raw_json)
-       VALUES (?, ?, ?, ?, ?)""",
-    (tx_id, currency, dt_iso, amount, json.dumps(row, ensure_ascii=False, default=str))
+    """INSERT OR IGNORE INTO transfers (transaction_id, currency, datetime, amount, origin, kind, raw_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+    (tx_id, currency, dt_iso, amount, origin, kind, json.dumps(row, ensure_ascii=False, default=str))
   )
   return conn.total_changes > before
 
