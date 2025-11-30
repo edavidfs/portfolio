@@ -2,11 +2,23 @@ import argparse
 import csv
 import json
 import logging
+from logging_config import configure_root_logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
 
+try:
+  from dotenv import load_dotenv
+except ImportError:
+  def load_dotenv():
+    return False
+
 from db import ensure_schema, get_connection
+try:
+  from dotenv import load_dotenv
+except ImportError:
+  def load_dotenv():
+    return False
 
 
 def parse_args():
@@ -39,6 +51,22 @@ def read_payload_rows(payload_path: Path) -> Iterable[Tuple[int, Dict[str, Any]]
   for idx, row in enumerate(data):
     if isinstance(row, dict):
       yield idx, row
+
+
+def split_trade_rows(rows: Iterable[Tuple[int, Dict[str, Any]]]):
+  """
+  Divide filas de trades en dos grupos:
+  - primarias: compras/ventas/FX con cabecera corta (CurrencyPrimary, AssetClass, Symbol, Quantity, TradePrice, Buy/Sell, IBExecID, etc.).
+  - secundarias: cabecera extendida (Model, FXRateToBase, Description...) que se procesarán más adelante.
+  """
+  primary = []
+  secondary = []
+  for row_index, data in rows:
+    if any(key in data for key in ("Model", "FXRateToBase", "Description", "LevelOfDetail", "DeliveryType")):
+      secondary.append((row_index, data))
+    else:
+      primary.append((row_index, data))
+  return primary, secondary
 
 
 def parse_datetime(raw: Any):
@@ -100,7 +128,7 @@ def parse_float(value: Any):
 
 
 def extract_transaction_id(row: Dict[str, Any]):
-  candidates = ["TransactionID", "TransactionId", "ID", "Id"]
+  candidates = ["TransactionID", "TransactionId", "TradeID", "ID", "Id"]
   for key in candidates:
     val = row.get(key)
     if val:
@@ -126,12 +154,25 @@ def classify_transfer(row: Dict[str, Any], tx_id: str) -> Tuple[str, str]:
   # Prefijos conocidos para ignorar operaciones o FX internos
   if tx_upper.startswith("FX:"):
     return "fx_interno", "mov_interno"
-  if tx_upper.startswith("STK:") or tx_upper.startswith("OPT:"):
-    return "operacion", "operacion"
+  if tx_upper.startswith("STK:"):
+    return "operacion_stk", "operacion"
+  if tx_upper.startswith("OPT:"):
+    # Prima de opciones: flujo de caja
+    amount = parse_float(row.get("Amount")) or 0
+    kind = "deposito" if amount > 0 else "retiro"
+    return "operacion_opt", kind
   # Revisar campos de Asset/AssetClass
   asset_class = str(row.get("AssetClass") or row.get("Asset") or row.get("assetClass") or "").upper()
-  if asset_class in {"STK", "OPT"}:
-    return "operacion", "operacion"
+  if asset_class == "STK":
+    return "operacion_stk", "operacion"
+  if asset_class == "OPT":
+    amount = parse_float(row.get("Amount")) or 0
+    kind = "deposito" if amount > 0 else "retiro"
+    return "operacion_opt", kind
+  if asset_class == "CASH":
+    symbol = str(row.get("Ticker") or row.get("Symbol") or "").upper()
+    if "." in symbol:
+      return "fx_interno", "mov_interno"
   # Descripción
   activity = str(row.get("ActivityDescription") or row.get("Description") or "").upper()
   if "FX" in activity and "TRANSFER" in activity:
@@ -154,10 +195,12 @@ def upsert_transfer(conn, row: Dict[str, Any]) -> bool:
     return False
   amount = parse_float(row.get("Amount"))
   if amount is None:
+    amount = parse_float(row.get("Quantity"))
+  if amount is None:
     return False
   origin, kind = classify_transfer(row, tx_id)
-  if origin == "operacion":
-    # No se guardan flujos de operaciones en transfers
+  if origin.startswith("operacion"):
+    # No se guardan flujos de operaciones (STK/OPT) en transfers
     return False
   before = conn.total_changes
   conn.execute(
@@ -169,10 +212,13 @@ def upsert_transfer(conn, row: Dict[str, Any]) -> bool:
 
 
 def upsert_trade(conn, row: Dict[str, Any]) -> bool:
+  asset_class = str(row.get("AssetClass") or row.get("assetClass") or row.get("Asset") or "").strip().upper()
+  if asset_class not in {"STK", "OPT"}:
+    return False
   trade_id = str(row.get("TradeID") or row.get("trade_id") or "").strip()
-  ticker = str(row.get("Ticker") or row.get("ticker") or "").strip().upper()
+  ticker = str(row.get("Ticker") or row.get("ticker") or row.get("Symbol") or "").strip().upper()
   qty = parse_float(row.get("Quantity") or row.get("quantity"))
-  price = parse_float(row.get("PurchasePrice") or row.get("purchase") or row.get("purchasePrice"))
+  price = parse_float(row.get("PurchasePrice") or row.get("purchase") or row.get("purchasePrice") or row.get("Price") or row.get("TradePrice"))
   dt_raw = row.get("DateTime") or row.get("dateTime") or row.get("Date")
   dt_iso = None
   if dt_raw:
@@ -187,7 +233,6 @@ def upsert_trade(conn, row: Dict[str, Any]) -> bool:
   comm_currency = (row.get("CommissionCurrency") or row.get("commissionCurrency") or row.get("CommissionCurrency") or "").strip().upper()
   currency = (row.get("CurrencyPrimary") or row.get("currencyPrimary") or row.get("Currency") or "").strip().upper()
   isin = str(row.get("ISIN") or row.get("isin") or "").strip().upper()
-  asset_class = str(row.get("AssetClass") or row.get("assetClass") or "").strip().upper()
   if not trade_id:
     if not ticker or qty is None or price is None:
       return False
@@ -255,15 +300,16 @@ def upsert_dividend(conn, row: Dict[str, Any]) -> bool:
 
 
 def main():
+  load_dotenv()
+  configure_root_logging()
+  logging.info("importer.py: importando datos")
   args = parse_args()
   db_path = Path(args.db)
   db_path.parent.mkdir(parents=True, exist_ok=True)
-  log_path = Path(args.log) if args.log else None
-  if log_path:
+  if args.log:
+    log_path = Path(args.log).expanduser()
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(filename=str(log_path), level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
-  else:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+    logging.basicConfig(filename=str(log_path), level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s", filemode='a')
   conn = get_connection(str(db_path))
   ensure_schema(conn)
   if args.init_only:
@@ -305,7 +351,13 @@ def main():
     inserted_transfers = 0
     inserted_trades = 0
     inserted_dividends = 0
-    for row_index, data in iterator:
+    rows_cache = list(iterator)
+    if kind == "trades":
+      rows_to_process, rows_secondary = split_trade_rows(rows_cache)
+    else:
+      rows_to_process, rows_secondary = rows_cache, []
+
+    for row_index, data in rows_to_process:
       conn.execute(
         "INSERT INTO import_rows (batch_id, row_index, data) VALUES (?, ?, ?)",
         (batch_id, row_index, json.dumps(data, ensure_ascii=False, default=str))
@@ -317,9 +369,19 @@ def main():
       elif kind == "trades":
         if upsert_trade(conn, data):
           inserted_trades += 1
+        else:
+          # Si no es STK/OPT, intentar guardarlo como transferencia (fx/cash)
+          upsert_transfer(conn, data)
       elif kind == "dividends":
         if upsert_dividend(conn, data):
           inserted_dividends += 1
+    # Registrar también el lote secundario en import_rows (sin procesar aún)
+    for row_index, data in rows_secondary:
+      conn.execute(
+        "INSERT INTO import_rows (batch_id, row_index, data) VALUES (?, ?, ?)",
+        (batch_id, row_index, json.dumps(data, ensure_ascii=False, default=str))
+      )
+      total += 1
     conn.execute("UPDATE import_batches SET total_rows = ? WHERE id = ?", (total, batch_id))
     conn.commit()
     logging.info(

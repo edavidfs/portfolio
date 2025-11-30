@@ -11,7 +11,7 @@ import { DataService } from '../../services/data.service';
 })
 export class ConfigViewComponent implements OnInit {
   private data = inject(DataService);
-  baseCurrency = signal<string>('USD');
+  baseCurrency = signal<string>('EUR');
   saving = signal<boolean>(false);
   message = signal<string>('');
 
@@ -31,13 +31,10 @@ export class ConfigViewComponent implements OnInit {
 
   async save() {
     const cur = (this.baseCurrency() || '').toUpperCase().trim();
-    if (!cur || cur.length < 3) {
-      this.message.set('Moneda inválida.');
-      return;
-    }
     this.saving.set(true);
     this.message.set('');
     try {
+      console.log("guardamos la moneda base")
       await this.data.updateBaseCurrency(cur);
       this.message.set('Moneda base guardada.');
     } catch (error) {

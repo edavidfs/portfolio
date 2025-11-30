@@ -10,11 +10,30 @@ import { ImportsViewComponent } from './components/imports-view/imports-view.com
 import { ToastsComponent } from './components/toasts/toasts.component';
 import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { ConfigViewComponent } from './components/config-view/config-view.component';
+import { TopbarComponent } from './components/layout/topbar/topbar.component';
+import { SidebarComponent } from './components/layout/sidebar/sidebar.component';
+import { BottombarComponent } from './components/layout/bottombar/bottombar.component';
+import { ContentLayoutComponent } from './components/layout/content-layout/content-layout.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, CashViewComponent, PositionsViewComponent, TransfersViewComponent, DividendsViewComponent, ImportsViewComponent, DashboardComponent, ConfigViewComponent, ToastsComponent, RouterOutlet],
+  imports: [
+    CommonModule,
+    CashViewComponent,
+    PositionsViewComponent,
+    TransfersViewComponent,
+    DividendsViewComponent,
+    ImportsViewComponent,
+    DashboardComponent,
+    ConfigViewComponent,
+    ToastsComponent,
+    TopbarComponent,
+    SidebarComponent,
+    BottombarComponent,
+    ContentLayoutComponent,
+    RouterOutlet
+  ],
   templateUrl: './app.component.html'
 })
 export class AppComponent implements OnInit {
@@ -22,8 +41,6 @@ export class AppComponent implements OnInit {
   private router = inject(Router);
   view = signal<'dashboard'|'positions'|'cash'|'transfers'|'dividends'|'imports'|'config'>('dashboard');
   isDetail = signal<boolean>(false);
-  syncingFx = signal<boolean>(false);
-  fxMessage = signal<string>('');
   constructor(){
     this.isDetail.set(this.router.url.startsWith('/ticker/'));
     this.router.events.subscribe(ev => {
@@ -39,17 +56,6 @@ export class AppComponent implements OnInit {
   closeDetail(){
     if (this.router.url.startsWith('/ticker/')) {
       this.router.navigateByUrl('/');
-    }
-  }
-  async syncFx(){
-    this.syncingFx.set(true);
-    this.fxMessage.set('');
-    try {
-      const res = await this.data.syncFx();
-      this.fxMessage.set(`FX actualizado`);
-      return res;
-    } finally {
-      this.syncingFx.set(false);
     }
   }
 }

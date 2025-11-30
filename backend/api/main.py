@@ -34,6 +34,7 @@ from pydantic import BaseModel
 from db import ensure_schema, get_connection
 from prices import list_price_series, latest_prices_for_tickers, sync_prices_for_tickers
 from fx import sync_fx_for_currencies
+from logging_config import configure_root_logging, LOG_PATH
 from .portfolio_service import (
   _parse_date,
   _parse_db_datetime,
@@ -52,15 +53,18 @@ IMPORTER_PATH = BASE_DIR / 'importer.py'
 APP_IDENTIFIER = "com.portfolio.desktop"
 
 load_dotenv()
+configure_root_logging()
 
 
 def default_db_path() -> Path:
+  """Ruta por defecto de la base de datos en el directorio de datos del usuario."""
   base = Path(user_data_dir(APP_IDENTIFIER, False))
   base.mkdir(parents=True, exist_ok=True)
   return base / 'portfolio.db'
 
 
 def get_db_path() -> Path:
+  """Resuelve la ruta de la base de datos (env PORTFOLIO_DB_PATH o default)."""
   env = os.environ.get('PORTFOLIO_DB_PATH')
   if env:
     return Path(env)
@@ -68,6 +72,7 @@ def get_db_path() -> Path:
 
 
 def ensure_db_ready() -> Path:
+  """Crea la carpeta y asegura el esquema de la base antes de operar."""
   db_path = get_db_path()
   db_path.parent.mkdir(parents=True, exist_ok=True)
   conn = get_connection(str(db_path))
@@ -77,6 +82,10 @@ def ensure_db_ready() -> Path:
 
 
 def run_importer(kind: str, rows: List[Dict[str, Any]]):
+  """
+  Ejecuta el importador Python en un subproceso con un payload JSON temporal.
+  Se usa para procesar CSV crudos (trades/transfers/dividends) y persistirlos en SQLite.
+  """
   db_path = ensure_db_ready()
   log_path = db_path.with_suffix('.log')
   with tempfile.NamedTemporaryFile('w', delete=False, suffix='.json') as handle:
@@ -318,6 +327,209 @@ def list_transfers():
   return rows
 
 
+@app.get('/cash/balance')
+def cash_balance():
+  """
+  Devuelve balance por divisa sin conversión FX, sumando transferencias, dividendos y flujo de trades (STK/OPT).
+  Incluye transferencias externas e internas; no descuenta valor de posiciones.
+  """
+  db_path = ensure_db_ready()
+  conn = get_connection(str(db_path))
+  ensure_schema(conn)
+  try:
+    # Transferencias
+    cur = conn.execute("""
+      SELECT currency, SUM(amount) as total
+      FROM transfers
+      GROUP BY currency
+    """)
+    transfer_totals = { (row[0] or '').upper(): float(row[1] or 0.0) for row in cur.fetchall() }
+
+    # Dividendos
+    cur = conn.execute("""
+      SELECT currency, SUM(amount) as total
+      FROM dividends
+      GROUP BY currency
+    """)
+    for currency, total in cur.fetchall():
+      key = (currency or '').upper()
+      transfer_totals[key] = transfer_totals.get(key, 0.0) + float(total or 0.0)
+
+    # Trades STK: flujo de caja por compra/venta y comisión si misma divisa
+    cur = conn.execute("""
+      SELECT currency, quantity, purchase, commission, commission_currency
+      FROM trades
+      WHERE asset_class = 'STK'
+    """)
+    for currency, qty, price, commission, comm_cur in cur.fetchall():
+      ccy = (currency or '').upper()
+      if not ccy:
+        continue
+      q = float(qty or 0.0)
+      p = float(price or 0.0)
+      comm = float(commission or 0.0)
+      comm_ccy = (comm_cur or '').upper()
+      flow = -(q * p)  # compra: qty>0 => flujo negativo; venta qty<0 => flujo positivo
+      if not comm_ccy or comm_ccy == ccy:
+        flow -= comm
+      transfer_totals[ccy] = transfer_totals.get(ccy, 0.0) + flow
+
+    balances = [{'currency': cur, 'balance': round(val, 4)} for cur, val in transfer_totals.items()]
+    return {'balances': balances}
+  finally:
+    conn.close()
+
+
+@app.get('/transfers/series')
+def transfers_series(interval: str = Query('day', pattern='^(day|month)$'), from_date: Optional[str] = None, to_date: Optional[str] = None):
+  """
+  Serie de transferencias por divisa sin convertir FX.
+  Incluye transferencias externas e internas; cada divisa mantiene su propio acumulado.
+  """
+  db_path = ensure_db_ready()
+  conn = get_connection(str(db_path))
+  ensure_schema(conn)
+  try:
+    rows = fetch_rows(
+      "SELECT currency, datetime, amount, origin FROM transfers ORDER BY datetime ASC",
+      ['currency', 'datetime', 'amount', 'origin']
+    )
+  finally:
+    conn.close()
+
+  def parse_dt(dt_str: str) -> date:
+    return datetime.fromisoformat(dt_str).date()
+
+  def bucket_for(d: date) -> date:
+    if interval == 'month':
+      return date(d.year, d.month, 1)
+    return d
+
+  from_d = datetime.fromisoformat(from_date).date() if from_date else None
+  to_d = datetime.fromisoformat(to_date).date() if to_date else None
+
+  series: Dict[str, Dict[date, float]] = {}
+  for row in rows:
+    try:
+      dt = parse_dt(str(row['datetime']))
+    except Exception:
+      continue
+    if from_d and dt < from_d:
+      continue
+    if to_d and dt > to_d:
+      continue
+    cur = (row.get('currency') or '').upper() or 'N/A'
+    amount = float(row.get('amount') or 0.0)
+    bucket = bucket_for(dt)
+    by_date = series.setdefault(cur, {})
+    by_date[bucket] = by_date.get(bucket, 0.0) + amount
+
+  result: Dict[str, List[Dict[str, Any]]] = {}
+  for cur, by_date in series.items():
+    cumulative = 0.0
+    points = []
+    for day in sorted(by_date.keys()):
+      cumulative += by_date[day]
+      points.append({
+        'date': day.isoformat(),
+        'amount': round(by_date[day], 4),
+        'cumulative': round(cumulative, 4)
+      })
+    result[cur] = points
+
+  return {
+    'interval': interval,
+    'series': result
+  }
+
+
+@app.get('/cash/series')
+def cash_series(interval: str = Query('day', pattern='^(day|month)$'), from_date: Optional[str] = None, to_date: Optional[str] = None):
+  """
+  Serie temporal de efectivo por divisa (transferencias + dividendos + trades STK), sin conversión FX.
+  """
+  db_path = ensure_db_ready()
+  conn = get_connection(str(db_path))
+  ensure_schema(conn)
+  try:
+    transfers = fetch_rows(
+      "SELECT currency, datetime, amount FROM transfers ORDER BY datetime ASC",
+      ['currency', 'datetime', 'amount']
+    )
+    dividends = fetch_rows(
+      "SELECT currency, datetime, amount FROM dividends ORDER BY datetime ASC",
+      ['currency', 'datetime', 'amount']
+    )
+    trades = fetch_rows(
+      "SELECT currency, datetime, quantity, purchase, commission, commission_currency FROM trades WHERE asset_class = 'STK' ORDER BY datetime ASC",
+      ['currency', 'datetime', 'quantity', 'purchase', 'commission', 'commission_currency']
+    )
+  finally:
+    conn.close()
+
+  def parse_dt(dt_str: str) -> date:
+    return datetime.fromisoformat(dt_str).date()
+
+  def bucket_for(d: date) -> date:
+    if interval == 'month':
+      return date(d.year, d.month, 1)
+    return d
+
+  from_d = datetime.fromisoformat(from_date).date() if from_date else None
+  to_d = datetime.fromisoformat(to_date).date() if to_date else None
+
+  series: Dict[str, Dict[date, float]] = {}
+  rows_all: List[Dict[str, Any]] = []
+  rows_all.extend(transfers)
+  rows_all.extend(dividends)
+  # Trades STK -> flujo de caja
+  for row in trades:
+    currency = (row.get('currency') or '').upper()
+    if not currency:
+      continue
+    qty = float(row.get('quantity') or 0.0)
+    price = float(row.get('purchase') or 0.0)
+    commission = float(row.get('commission') or 0.0)
+    comm_cur = (row.get('commission_currency') or '').upper()
+    flow = -(qty * price)
+    if not comm_cur or comm_cur == currency:
+      flow -= commission
+    rows_all.append({'currency': currency, 'datetime': row.get('datetime'), 'amount': flow})
+
+  for row in rows_all:
+    try:
+      dt = parse_dt(str(row['datetime']))
+    except Exception:
+      continue
+    if from_d and dt < from_d:
+      continue
+    if to_d and dt > to_d:
+      continue
+    cur = (row.get('currency') or '').upper() or 'N/A'
+    amount = float(row.get('amount') or 0.0)
+    bucket = bucket_for(dt)
+    by_date = series.setdefault(cur, {})
+    by_date[bucket] = by_date.get(bucket, 0.0) + amount
+
+  result: Dict[str, List[Dict[str, Any]]] = {}
+  for cur, by_date in series.items():
+    cumulative = 0.0
+    points = []
+    for day in sorted(by_date.keys()):
+      cumulative += by_date[day]
+      points.append({
+        'date': day.isoformat(),
+        'amount': round(by_date[day], 4),
+        'cumulative': round(cumulative, 4)
+      })
+    result[cur] = points
+
+  return {
+    'interval': interval,
+    'series': result
+  }
+
+
 @app.get('/portfolio/value')
 def portfolio_value():
   db_path = ensure_db_ready()
@@ -438,8 +650,8 @@ def reset_database():
 @app.get('/trades')
 def list_trades():
   rows = fetch_rows(
-    "SELECT trade_id, ticker, quantity, purchase, datetime, commission, commission_currency, currency, isin, asset_class FROM trades ORDER BY datetime ASC",
-    ['trade_id', 'ticker', 'quantity', 'purchase', 'datetime', 'commission', 'commission_currency', 'currency', 'isin', 'asset_class']
+    "SELECT trade_id, ticker, quantity, purchase, datetime, commission, commission_currency, currency, isin, asset_class, raw_json FROM trades ORDER BY datetime ASC",
+    ['trade_id', 'ticker', 'quantity', 'purchase', 'datetime', 'commission', 'commission_currency', 'currency', 'isin', 'asset_class', 'raw_json']
   )
   return rows
 

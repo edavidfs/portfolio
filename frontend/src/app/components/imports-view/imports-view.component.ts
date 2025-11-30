@@ -15,7 +15,7 @@ export class ImportsViewComponent {
   onTrades(e:any){ const files:FileList = e.target.files; this.data.parseFiles(files, async flat => { await this.data.importTradesAndCash(flat); }); }
   onTransfers(e:any){
     const files:FileList = e.target.files;
-    this.data.parseFiles(files, async flat => { await this.data.importTransfersFromBackendPayload(flat); });
+    this.data.parseFiles(files, async flat => { await this.data.importTradesAndCash(flat); });
     try { if (e?.target) e.target.value = ''; } catch {}
   }
   onDividends(e:any){ const files:FileList = e.target.files; this.data.parseFiles(files, async flat => { await this.data.importDividends(flat); }); }

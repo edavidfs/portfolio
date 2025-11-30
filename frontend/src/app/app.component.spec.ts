@@ -15,6 +15,8 @@ class MockDataService {
   options = signal<any[]>([]);
   init = jasmine.createSpy('init');
   syncFx = jasmine.createSpy('syncFx').and.returnValue(Promise.resolve());
+  syncingFx = signal(false);
+  syncFxMessage = signal('');
   getPortfolioValueSeries = jasmine.createSpy('getPortfolioValueSeries').and.returnValue(Promise.resolve([]));
   fetchPricesBatch = jasmine.createSpy('fetchPricesBatch').and.returnValue(Promise.resolve({}));
   aggregateTradesFifoByTicker = jasmine.createSpy('aggregateTradesFifoByTicker').and.returnValue({});
@@ -28,6 +30,9 @@ describe('AppComponent health check', () => {
 
   beforeEach(async () => {
     data = new MockDataService();
+    (globalThis as any).Chart = function () {
+      return { destroy() {} };
+    };
     await TestBed.configureTestingModule({
       imports: [AppComponent, RouterTestingModule],
       providers: [{ provide: DataService, useValue: data }],
@@ -79,14 +84,13 @@ describe('AppComponent health check', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const errorBanner = fixture.nativeElement.querySelector('div.bg-red-50');
-    expect(errorBanner).toBeTruthy();
+    const bottomRetryBtn = fixture.nativeElement.querySelector('app-bottombar button');
+    expect(bottomRetryBtn).toBeTruthy();
     const sidebarButtons = fixture.nativeElement.querySelectorAll('aside button');
     sidebarButtons.forEach((btn: HTMLButtonElement) => expect(btn.disabled).toBeTrue());
     expect(data.init).toHaveBeenCalledTimes(1);
 
-    const retryBtn = fixture.nativeElement.querySelector('button.bg-red-600');
-    retryBtn.click();
+    bottomRetryBtn.click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();

@@ -51,6 +51,37 @@ describe('DataService.getPortfolioValueSeries', () => {
   });
 });
 
+describe('DataService opciones desde backend', () => {
+  // Cobertura: REQ-BK-0013 (opciones expuestas por backend)
+  let service: DataService;
+  const toast = new MockToast() as any;
+
+  beforeEach(() => {
+    service = new DataService(toast);
+    (globalThis as any).fetch = undefined;
+  });
+
+  it('sincroniza opciones desde /trades', async () => {
+    const mockTrades = [
+      { trade_id: 'OPT-1', ticker: 'AAPL', quantity: 1, purchase: 2.5, datetime: '2024-01-10T00:00:00', commission: 1, commission_currency: 'USD', currency: 'USD', asset_class: 'OPT', raw_json: '{"Underlying":"AAPL","Side":"SELL","contracts":1,"multiplier":100,"premiumGross":250}' },
+      { trade_id: 'STK-1', ticker: 'AAPL', quantity: 10, purchase: 100, datetime: '2024-01-09T00:00:00', asset_class: 'STK' }
+    ];
+    const fetchSpy = jasmine.createSpy('fetch').and.returnValue(Promise.resolve({
+      ok: true,
+      json: async () => mockTrades
+    }));
+    (globalThis as any).fetch = fetchSpy;
+
+    await (service as any).syncTradesFromBackend();
+
+    expect(fetchSpy).toHaveBeenCalledWith(jasmine.stringMatching(/\/trades$/));
+    const options = service.options();
+    expect(options.length).toBe(1);
+    expect(options[0].OptionID).toBe('OPT-1');
+    expect(options[0].underlying).toBe('AAPL');
+  });
+});
+
 describe('DataService health/init', () => {
   // Cobertura: REQ-UI-0020 (health al iniciar y bloqueo de acciones)
   let service: DataService;

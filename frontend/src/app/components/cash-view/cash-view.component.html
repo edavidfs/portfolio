@@ -1,28 +1,58 @@
-<div class="container mx-auto">
-  <canvas id="cashChart" height="70"></canvas>
-</div>
-<div class="container mx-auto mt-6">
-  <h3 class="text-sm font-medium text-gray-700 mb-2">Evolución de primas (cobradas/pagadas)</h3>
-  <canvas id="optionsPremiumChart" height="60"></canvas>
-</div>
-<div class="container mx-auto">
-  <h3 class="text-sm font-medium text-gray-700 mb-2">Operaciones de efectivo (Transferencias y FX)</h3>
-  <table class="min-w-full divide-y divide-gray-200">
-    <thead class="bg-gray-50">
-      <tr>
-        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Importe</th>
-        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Moneda</th>
-        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-      </tr>
-    </thead>
-    <tbody class="bg-white divide-y divide-gray-200">
-      <tr *ngFor="let r of rows">
-        <td class="px-3 py-1">{{ r.DateTime | date:'dd/MM/yyyy' }}</td>
-        <td class="px-3 py-1">{{ r.Amount | number:'1.2-2' }}</td>
-        <td class="px-3 py-1">{{ r.CurrencyPrimary }}</td>
-        <td class="px-3 py-1">{{ getType(r) }}</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+<section class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border p-4">
+    <h3 class="text-sm font-medium text-gray-700 mb-2">Balance por divisa (transferencias + dividendos)</h3>
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Divisa</th>
+          <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Balance</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <tr *ngFor="let b of balances()">
+          <td class="px-3 py-2 font-semibold">{{ b.currency }}</td>
+          <td class="px-3 py-2">{{ b.balance | number:'1.2-2' }}</td>
+        </tr>
+        <tr *ngIf="!balances().length">
+          <td colspan="2" class="px-3 py-4 text-center text-slate-500">Sin movimientos de efectivo.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border p-4">
+    <h3 class="text-sm font-medium text-gray-700 mb-2">Evolución de efectivo por divisa</h3>
+    <div class="h-64">
+      <canvas id="cashChart"></canvas>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border p-4">
+    <h3 class="text-sm font-medium text-gray-700 mb-2">Evolución de primas (cobradas/pagadas)</h3>
+    <div class="h-56">
+      <canvas id="optionsPremiumChart"></canvas>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border p-4">
+    <h3 class="text-sm font-medium text-gray-700 mb-2">Operaciones de efectivo (Transferencias y FX)</h3>
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+          <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Importe</th>
+          <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Moneda</th>
+          <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <tr *ngFor="let r of rows">
+          <td class="px-3 py-2">{{ r.DateTime | date:'dd/MM/yyyy' }}</td>
+          <td class="px-3 py-2">{{ r.Amount | number:'1.2-2' }}</td>
+          <td class="px-3 py-2">{{ r.CurrencyPrimary }}</td>
+          <td class="px-3 py-2">{{ getType(r) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>

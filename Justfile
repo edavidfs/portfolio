@@ -9,11 +9,9 @@ build:
 backend:
     (cd backend && source .venv/bin/activate && PYTHONPATH=.. uvicorn backend.api.main:app --reload)
 
-
 # Levanta la app en modo desarrollo con Tauri (cargo tauri dev lanza ng serve gracias a beforeDevCommand).
 dev:
     (cd src-tauri && cargo tauri dev)
-
 
 # Actualiza los paq uetes de rust
 update:

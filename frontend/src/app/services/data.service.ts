@@ -35,6 +35,8 @@ export class DataService {
   dividends = signal<DividendRow[]>([]);
   options = signal<OptionRow[]>([]);
   baseCurrency = signal<string>('USD');
+  syncingFx = signal<boolean>(false);
+  syncFxMessage = signal<string>('');
   serviceChecking = signal<boolean>(false);
   serviceAvailable = signal<boolean>(false);
   serviceError = signal<string>('');
@@ -276,36 +278,12 @@ export class DataService {
 
   // Importación desde inputs
   async importTradesAndCash(data:any[]){
-    const { stocks, cash, options } = this.sanitizeOperations(data);
-    const seenIds = new Set<string>();
-    const seenKeys = new Set<string>();
-    const stockRows = stocks.filter(r => {
-      const id = r.TradeID;
-      if (id) { if (seenIds.has(id) || this.tradeIds.has(id)) return false; seenIds.add(id); return true; }
-      const key = `${r.Ticker}|${r.Quantity}|${r.PurchasePrice}`;
-      if (seenKeys.has(key) || this.tradeKeys.has(key)) return false; seenKeys.add(key); return true;
-    });
-    const seenCash = new Set<string>();
-    const cashRows = cash.filter(r => { const key = String(r.TransactionID); if (!key) return false; if (seenCash.has(key) || this.transferIds.has(key)) return false; seenCash.add(key); return true; });
-    const dupStocks = stocks.length - stockRows.length;
-    const dupCash = cash.length - cashRows.length;
-    // Derivar flujos de STK
-    const stockCashRows = this.stockTradesToCashRows(stockRows).filter(r => !this.transferIds.has(String(r.TransactionID)));
-    const newTransfers = [...cashRows, ...stockCashRows];
-    if (options.length) {
-      const existing = new Set(this.options().map(o => o.OptionID));
-      const toAdd = options.filter(o => !existing.has(o.OptionID));
-      if (toAdd.length) { this.options.set([...this.options(), ...toAdd]); }
-    }
-    const msg = `STK: ${stockRows.length} (ign: ${dupStocks}) | CASH/FX: ${cashRows.length} (ign: ${dupCash}) | CASH de STK: ${stockCashRows.length}.`;
-    this.toast.success(msg);
-    if (stockRows.length) {
-      await this.importTradesToBackend(stockRows);
-      await this.syncTradesFromBackend();
-    }
-    if (newTransfers.length) {
-      await this.importTransfersFromBackendPayload(newTransfers);
-    }
+    // Enviar filas sin procesar al backend; él clasifica trades/transfers/options.
+    const payload = this.normalizeRowsForBackend(data);
+    await this.importTradesToBackend(payload as any);
+    await this.importTransfersFromBackendPayload(payload as any);
+    await this.syncTradesFromBackend();
+    await this.syncTransfersFromBackend();
   }
 
   async importTransfersFromBackendPayload(rows:any[]){
@@ -611,6 +589,11 @@ export class DataService {
       this.trades.set(mapped);
       this.tradeIds = new Set(mapped.map(r => String(r.TradeID||'')));
       this.tradeKeys = new Set(mapped.map(r => `${r.Ticker}|${r.Quantity}|${r.PurchasePrice}`));
+      const options = remote
+        .filter((item:any) => (item.asset_class || '').toUpperCase() === 'OPT')
+        .map((item:any) => this.mapOptionFromTrade(item))
+        .filter((o:any) => o.OptionID && o.DateTime instanceof Date);
+      this.options.set(options);
     } catch (error) {
       console.error('syncTradesFromBackend', error);
       this.toast.warning('No se pudo sincronizar las operaciones del backend.');
@@ -675,14 +658,20 @@ export class DataService {
 
   async syncFx(currencies?: string[]) {
     const clean = currencies ? Array.from(new Set((currencies || []).map(c => c.toUpperCase()).filter(Boolean))) : [];
+    this.syncingFx.set(true);
+    this.syncFxMessage.set('');
     try {
       const res = await this.apiPost('/fx/sync', { tickers: clean });
       const synced = res?.updated ? Object.keys(res.updated).join(', ') : (clean.length ? clean.join(', ') : 'auto');
       this.toast.success(`FX sincronizado (${synced})`);
+      this.syncFxMessage.set(`FX sincronizado (${synced})`);
       return res;
     } catch (error:any) {
       console.error('syncFx', error);
+      this.syncFxMessage.set(error?.message || 'No se pudo sincronizar FX.');
       this.toast.error(error?.message || 'No se pudo sincronizar FX.');
+    } finally {
+      this.syncingFx.set(false);
     }
   }
 
@@ -708,6 +697,53 @@ export class DataService {
         pnlPct: Number(item.pnl_pct) || 0
       }))
       .filter(item => !isNaN(item.date.getTime()));
+  }
+
+  async getTransfersSeries(interval: 'day'|'month' = 'day', from?: string, to?: string) {
+    const params = new URLSearchParams({ interval });
+    if (from) params.set('from_date', from);
+    if (to) params.set('to_date', to);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await this.apiGet(`/transfers/series${query}`);
+    const series = res?.series || {};
+    const mapped: Record<string, { date: Date; amount: number; cumulative: number }[]> = {};
+    Object.entries(series).forEach(([cur, points]: any) => {
+      mapped[cur] = (points || [])
+        .map((p: any) => ({
+          date: new Date(p.date),
+          amount: Number(p.amount) || 0,
+          cumulative: Number(p.cumulative) || 0
+        }))
+        .filter(p => !isNaN(p.date.getTime()))
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+    });
+    return mapped;
+  }
+
+  async getCashBalances() {
+    const res = await this.apiGet('/cash/balance');
+    return Array.isArray(res?.balances) ? res.balances : [];
+  }
+
+  async getCashSeries(interval: 'day'|'month' = 'day', from?: string, to?: string) {
+    const params = new URLSearchParams({ interval });
+    if (from) params.set('from_date', from);
+    if (to) params.set('to_date', to);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const res = await this.apiGet(`/cash/series${query}`);
+    const series = res?.series || {};
+    const mapped: Record<string, { date: Date; amount: number; cumulative: number }[]> = {};
+    Object.entries(series).forEach(([cur, points]: any) => {
+      mapped[cur] = (points || [])
+        .map((p: any) => ({
+          date: new Date(p.date),
+          amount: Number(p.amount) || 0,
+          cumulative: Number(p.cumulative) || 0
+        }))
+        .filter(p => !isNaN(p.date.getTime()))
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+    });
+    return mapped;
   }
 
   private async apiGet(path: string){
@@ -742,5 +778,36 @@ export class DataService {
       return row;
     });
     return mutated ? converted : rows;
+  }
+
+  private mapOptionFromTrade(row:any): OptionRow {
+    let raw: any = {};
+    try { raw = row.raw_json ? JSON.parse(row.raw_json) : {}; } catch (_) { raw = {}; }
+    const dt = row.datetime || raw.DateTime || raw['Date/Time'];
+    const sideRaw = (raw.side || raw.Side || '').toUpperCase();
+    const qty = Math.abs(Number(raw.contracts || raw.Contracts || row.quantity || 0)) || 0;
+    const multiplier = Number(raw.multiplier || raw.calcMultiplier || 100) || 100;
+    const premiumGross = Number(raw.premiumGross || raw.PremiumGross || (row.purchase && qty ? qty * Number(row.purchase) * multiplier : 0)) || 0;
+    const currency = (row.currency || raw.currencyPrimary || raw.CurrencyPrimary || '').toString().toUpperCase() || 'USD';
+    return {
+      OptionID: row.trade_id || raw.OptionID || raw.trade_id,
+      underlying: (raw.underlying || raw.Underlying || this.extractUnderlyingFromSymbol(row.ticker || '') || '').toString().toUpperCase(),
+      symbol: raw.symbol || raw.Symbol || row.ticker || '',
+      side: sideRaw === 'SELL' ? 'SELL' : 'BUY',
+      contracts: qty,
+      tradePrice: Number(raw.tradePrice || raw.TradePrice || row.purchase || 0) || 0,
+      multiplier,
+      premiumGross,
+      commission: Number(row.commission || raw.commission || 0) || 0,
+      commissionCurrency: (row.commission_currency || raw.commissionCurrency || '').toString().toUpperCase() || undefined,
+      currencyPrimary: currency,
+      DateTime: dt ? new Date(dt) : null as any,
+      execId: raw.execId || raw.ExecID || undefined,
+      expiry: raw.expiry ? new Date(raw.expiry) : undefined,
+      optType: (raw.optType || raw.Type || '').toUpperCase() as any,
+      strike: raw.strike ? Number(raw.strike) : undefined,
+      calcMultiplier: raw.calcMultiplier ? Number(raw.calcMultiplier) : undefined,
+      notional: raw.notional ? Number(raw.notional) : undefined
+    };
   }
 }

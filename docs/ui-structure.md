@@ -18,6 +18,11 @@ Propósito: guiar la definición y construcción de la interfaz en Angular para 
 - Estadísticas: tarjetas KPIs; gráfico de valor vs. benchmark con sombreado drawdown; tabla de contribución por activo/clase; controles de tasa libre y rango.
 - Configuración: formulario simple con validaciones; selector de ruta local (Tauri); toggles de preferencias; aviso de reinicio si aplica.
 
+## Estilos y layout
+- TailwindCSS como librería utilitaria principal para layout y espaciados; las clases existentes (`bg-gray-800`, `flex`, etc.) ya se sirven desde Tailwind.
+- Scroll sólo en el área central: header, sidebar y bottombar fijos visibles; el contenido principal usa overflow para evitar scroll global (**REQ-UI-0021**).
+- Mantener tipografía sans por defecto; definir variables de color en caso de extender tema (palette acorde a dashboard).
+
 ## Componentes y jerarquía (ejemplos)
 - `dashboard-page`: orquesta filtros, KPIs y gráficos.
 - `kpi-card`: muestra valor, variación y tooltip; inputs: `label`, `value`, `delta`, `loading`.
