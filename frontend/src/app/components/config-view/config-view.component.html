@@ -1,0 +1,25 @@
+<section class="space-y-4 max-w-xl">
+  <header>
+    <h2 class="text-xl font-semibold">Configuración</h2>
+    <p class="text-sm text-gray-600">Selecciona la moneda base para cálculos y KPIs.</p>
+  </header>
+  <div class="bg-white border rounded-xl p-4 shadow-sm space-y-3">
+    <label class="block text-sm font-medium text-gray-700">Moneda base</label>
+    <select
+      class="w-40 border rounded px-3 py-2 bg-white"
+      [ngModel]="baseCurrency()"
+      (ngModelChange)="baseCurrency.set($event)"
+    >
+      <option value="EUR">EUR</option>
+      <option value="USD">USD</option>
+    </select>
+    <div class="flex items-center gap-2">
+      <button
+        class="px-4 py-2 rounded bg-indigo-600 text-white disabled:opacity-60"
+        [disabled]="saving()"
+        (click)="save()"
+      >Guardar</button>
+      <span class="text-sm text-gray-600" *ngIf="message()">{{ message() }}</span>
+    </div>
+  </div>
+</section>

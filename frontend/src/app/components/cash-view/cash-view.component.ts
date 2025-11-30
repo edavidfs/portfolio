@@ -1,4 +1,4 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DataService, TransferRow, DividendRow } from '../../services/data.service';
 
@@ -11,6 +11,8 @@ import { DataService, TransferRow, DividendRow } from '../../services/data.servi
 export class CashViewComponent implements OnInit {
   private data = inject(DataService);
   rows: TransferRow[] = [];
+  balances = signal<{ currency: string; balance: number }[]>([]);
+  cashSeries = signal<Record<string, { date: Date; cumulative: number; amount: number }[]>>({});
   private chart: any;
   private premChart: any;
   private yearBoundaryPlugin = this.buildYearBoundaryPlugin();
@@ -22,9 +24,21 @@ export class CashViewComponent implements OnInit {
   private refresh(){
     const trs = this.data.transfers();
     this.rows = trs.filter(r => this.getType(r) !== 'STK').sort((a,b)=> a.DateTime.getTime() - b.DateTime.getTime());
-    const all = [...this.data.transfers(), ...this.data.dividends()];
-    this.drawCashChart(all);
+    void this.loadCashSeries();
     this.drawPremiumChart(trs);
+    void this.loadBalances();
+  }
+
+  private async loadCashSeries() {
+    const today = new Date().toISOString().slice(0, 10);
+    const series = await this.data.getCashSeries('day', undefined, today);
+    this.cashSeries.set(series);
+    this.drawCashChart(series);
+  }
+
+  private async loadBalances() {
+    const res = await this.data.getCashBalances();
+    this.balances.set(res);
   }
 
   getType(row:TransferRow){
@@ -36,28 +50,19 @@ export class CashViewComponent implements OnInit {
     return 'Transferencia';
   }
 
-  private computeCashHistory(rows:(TransferRow|DividendRow)[]){
-    const sorted = [...rows].sort((a:any, b:any) => (a.DateTime as Date).getTime() - (b.DateTime as Date).getTime());
-    const histories: Record<string, {x:Date,y:number}[]> = {};
-    sorted.forEach((r:any) => {
-      const currency = r.CurrencyPrimary || r.currency;
-      const date = r.DateTime;
-      const amount = Number(r.Amount) || 0;
-      if (!histories[currency]) histories[currency] = [];
-      const last = histories[currency].length ? histories[currency][histories[currency].length - 1].y : 0;
-      histories[currency].push({ x: date, y: last + amount });
-    });
-    return histories;
-  }
-
-  private drawCashChart(rows:(TransferRow|DividendRow)[]){
-    const histories = this.computeCashHistory(rows);
-    const colors = ['rgba(75, 192, 192, 1)','rgba(54, 162, 235, 1)','rgba(255, 99, 132, 1)','rgba(255, 206, 86, 1)'];
-    const datasets = Object.keys(histories).map((currency, i) => ({ label: currency, data: histories[currency], borderColor: colors[i % colors.length], backgroundColor: colors[i % colors.length], fill: false }));
+  private drawCashChart(seriesMap: Record<string, { date: Date; cumulative: number }[]>) {
+    const colors = ['rgba(75, 192, 192, 1)','rgba(54, 162, 235, 1)','rgba(255, 99, 132, 1)','rgba(255, 206, 86, 1)', 'rgba(168,85,247,1)', 'rgba(16,185,129,1)'];
+    const datasets = Object.entries(seriesMap).map(([currency, points], i) => ({
+      label: currency,
+      data: points.map(p => ({ x: p.date.getTime(), y: p.cumulative })),
+      borderColor: colors[i % colors.length],
+      backgroundColor: colors[i % colors.length],
+      fill: false
+    }));
     if (!datasets.length) return;
     const canvas:any = document.getElementById('cashChart'); if (!canvas) return; const ctx = canvas.getContext('2d');
     if (this.chart) this.chart.destroy();
-    this.chart = new (window as any).Chart(ctx, { type: 'line', data: { datasets }, options: { responsive: true, scales: { x: { type: 'time', time: { unit: 'day' } }, y: { beginAtZero: true } } }, plugins: [this.yearBoundaryPlugin] });
+    this.chart = new (window as any).Chart(ctx, { type: 'line', data: { datasets }, options: { responsive: true, maintainAspectRatio: false, parsing: false, scales: { x: { type: 'time', time: { unit: 'day' }, ticks: { maxRotation: 0 } }, y: { beginAtZero: true } } }, plugins: [this.yearBoundaryPlugin] });
   }
 
   private drawPremiumChart(rows:TransferRow[]){

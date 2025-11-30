@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 import time as pytime
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from typing import Dict, List, Tuple
@@ -8,7 +9,9 @@ import yfinance as yf
 RATE_LIMIT_SECONDS = 1.5
 LOGGER = logging.getLogger(__name__)
 if not LOGGER.handlers:
-  handler = logging.FileHandler("backend-prices.log", encoding="utf-8")
+  log_path = Path(__file__).resolve().parent / "backend-fastapi.log"
+  log_path.parent.mkdir(parents=True, exist_ok=True)
+  handler = logging.FileHandler(log_path, encoding="utf-8")
   handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s"))
   LOGGER.addHandler(handler)
 LOGGER.propagate = False

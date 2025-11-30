@@ -1,23 +1,33 @@
-<nav class="bg-gray-800 text-white p-4">
-  <h1 class="text-xl font-semibold">Portfolio (Angular)</h1>
-</nav>
-<app-toasts></app-toasts>
-<div class="flex min-h-screen relative">
-  <aside class="w-64 bg-white border-r p-4 space-y-2">
-    <button class="w-full text-left px-3 py-2 rounded hover:bg-gray-100" [class.bg-indigo-50]="view() === 'positions'" (click)="setView('positions')">Posiciones</button>
-    <button class="w-full text-left px-3 py-2 rounded hover:bg-gray-100" [class.bg-indigo-50]="view() === 'cash'" (click)="setView('cash')">Efectivo</button>
-    <button class="w-full text-left px-3 py-2 rounded hover:bg-gray-100" [class.bg-indigo-50]="view() === 'transfers'" (click)="setView('transfers')">Transferencias</button>
-    <button class="w-full text-left px-3 py-2 rounded hover:bg-gray-100" [class.bg-indigo-50]="view() === 'dividends'" (click)="setView('dividends')">Dividendos</button>
-    <div class="pt-4 border-t"></div>
-    <button class="w-full text-left px-3 py-2 rounded hover:bg-gray-100" [class.bg-indigo-50]="view() === 'imports'" (click)="setView('imports')">Importaciones</button>
-  </aside>
-  <main class="flex-1 p-6 space-y-8">
-    <app-positions-view *ngIf="view() === 'positions'"></app-positions-view>
-    <app-cash-view *ngIf="view() === 'cash'"></app-cash-view>
-    <app-transfers-view *ngIf="view() === 'transfers'"></app-transfers-view>
-    <app-dividends-view *ngIf="view() === 'dividends'"></app-dividends-view>
-    <app-imports-view *ngIf="view() === 'imports'"></app-imports-view>
-  </main>
+<div class="flex flex-col h-screen bg-slate-50">
+  <app-topbar></app-topbar>
+  <app-toasts></app-toasts>
+  <div class="flex flex-1 min-h-0 w-full px-4 sm:px-6 lg:px-10 gap-4 py-4 pb-20">
+    <app-sidebar
+      class="h-full"
+      [view]="view()"
+      [checking]="data.serviceChecking()"
+      [available]="data.serviceAvailable()"
+      [syncingFx]="data.syncingFx()"
+      (viewChange)="setView($event)"
+      (syncFxClick)="data.syncFx()"
+    ></app-sidebar>
+    <app-content-layout>
+      <app-dashboard *ngIf="view() === 'dashboard'"></app-dashboard>
+      <app-positions-view *ngIf="view() === 'positions'"></app-positions-view>
+      <app-cash-view *ngIf="view() === 'cash'"></app-cash-view>
+      <app-transfers-view *ngIf="view() === 'transfers'"></app-transfers-view>
+      <app-dividends-view *ngIf="view() === 'dividends'"></app-dividends-view>
+      <app-imports-view *ngIf="view() === 'imports'"></app-imports-view>
+      <app-config-view *ngIf="view() === 'config'"></app-config-view>
+    </app-content-layout>
+  </div>
+  <app-bottombar
+    [checking]="data.serviceChecking()"
+    [available]="data.serviceAvailable()"
+    [error]="data.serviceError()"
+    [message]="data.syncFxMessage()"
+    (retry)="data.init()"
+  ></app-bottombar>
 </div>
 
 <div *ngIf="isDetail()" class="fixed inset-0 z-40 flex items-start justify-center bg-black/60 p-6 overflow-y-auto" (click)="closeDetail()">

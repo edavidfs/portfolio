@@ -1,0 +1,74 @@
+<section class="space-y-4">
+  <header class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-xl font-semibold">Dashboard</h2>
+      <p class="text-sm text-gray-600">Evolución del portafolio, aportes y beneficio en el tiempo.</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <label class="flex items-center gap-1 text-sm">
+        <input type="checkbox" [checked]="showTransfers()" (change)="toggleShowTransfers($event.target.checked)" />
+        Mostrar aportes/retiros
+      </label>
+      <label class="flex items-center gap-1 text-sm">
+        <input type="checkbox" [checked]="showPnlPct()" (change)="toggleShowPnlPct($event.target.checked)" />
+        Mostrar % beneficio/pérdida
+      </label>
+    </div>
+  </header>
+
+  <div class="bg-white border rounded-xl p-4 shadow-sm">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-semibold text-gray-800">Valor del Portafolio ({{ data.baseCurrency() }})</h3>
+      <div class="flex flex-wrap gap-2 text-sm">
+        <button class="px-3 py-1 rounded border" [class.bg-indigo-50]="range()==='30d'" (click)="setRange('30d')">30d</button>
+        <button class="px-3 py-1 rounded border" [class.bg-indigo-50]="range()==='90d'" (click)="setRange('90d')">90d</button>
+        <button class="px-3 py-1 rounded border" [class.bg-indigo-50]="range()==='1y'" (click)="setRange('1y')">1a</button>
+        <button class="px-3 py-1 rounded border" [class.bg-indigo-50]="range()==='all'" (click)="setRange('all')">Todo</button>
+      </div>
+    </div>
+    <div class="min-h-[260px] w-full space-y-2">
+      <div class="flex flex-wrap items-center gap-2 text-xs text-gray-700">
+        <span class="font-semibold">Intervalo:</span>
+        <button class="px-2 py-1 rounded border" [class.bg-indigo-50]="interval()==='day'" (click)="setInterval('day')">Diario</button>
+        <button class="px-2 py-1 rounded border" [class.bg-indigo-50]="interval()==='week'" (click)="setInterval('week')">Semanal</button>
+        <button class="px-2 py-1 rounded border" [class.bg-indigo-50]="interval()==='month'" (click)="setInterval('month')">Mensual</button>
+        <button class="px-2 py-1 rounded border" [class.bg-indigo-50]="interval()==='quarter'" (click)="setInterval('quarter')">Trimestral</button>
+        <button class="px-2 py-1 rounded border" [class.bg-indigo-50]="interval()==='year'" (click)="setInterval('year')">Anual</button>
+        <span class="ml-auto text-[11px] text-gray-500">Datos agrupados: {{ intervalLabel[interval()] }}</span>
+      </div>
+      <div class="relative w-full overflow-hidden">
+        <canvas id="dashboardChart" class="w-full block"></canvas>
+      </div>
+      <div *ngIf="loading()" class="text-sm text-gray-500">Cargando serie...</div>
+      <div *ngIf="!filteredSeries().length && !loading()" class="text-sm text-gray-500">No hay datos para mostrar. Importa datos y selecciona un rango.</div>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-3 gap-3">
+    <div class="bg-white border rounded-lg p-3 shadow-sm">
+      <p class="text-xs text-gray-500">Beneficio</p>
+      <p class="text-lg font-semibold">{{ summary().benefit | number:'1.0-2' }}</p>
+    </div>
+    <div class="bg-white border rounded-lg p-3 shadow-sm">
+      <p class="text-xs text-gray-500">Beneficio %</p>
+      <p class="text-lg font-semibold">{{ summary().benefitPct | number:'1.0-2' }}%</p>
+    </div>
+    <div class="bg-white border rounded-lg p-3 shadow-sm">
+      <p class="text-xs text-gray-500">Transferencias netas</p>
+      <p class="text-lg font-semibold">{{ summary().transfers | number:'1.0-2' }}</p>
+      <p class="text-[11px] text-gray-500">Solo aportes/retiros externos</p>
+    </div>
+    <div class="bg-white border rounded-lg p-3 shadow-sm">
+      <p class="text-xs text-gray-500">Dividendos</p>
+      <p class="text-lg font-semibold">{{ summary().dividends | number:'1.0-2' }}</p>
+    </div>
+    <div class="bg-white border rounded-lg p-3 shadow-sm">
+      <p class="text-xs text-gray-500">PnL opciones (primas)</p>
+      <p class="text-lg font-semibold">{{ summary().optionsPnl | number:'1.0-2' }}</p>
+    </div>
+    <div class="bg-white border rounded-lg p-3 shadow-sm">
+      <p class="text-xs text-gray-500">Intereses pagados</p>
+      <p class="text-lg font-semibold">{{ summary().interestPaid | number:'1.0-2' }}</p>
+    </div>
+  </div>
+</section>

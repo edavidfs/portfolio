@@ -1,4 +1,16 @@
-/* Estilos globales opcionales */
-html, body { height: 100%; }
-body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system; }
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* Estilos globales */
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  font-family: ui-sans-serif, system-ui, -apple-system;
+}
+
+app-root {
+  display: block;
+  height: 100%;
+}

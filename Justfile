@@ -9,11 +9,9 @@ build:
 backend:
     (cd backend && source .venv/bin/activate && PYTHONPATH=.. uvicorn backend.api.main:app --reload)
 
-
 # Levanta la app en modo desarrollo con Tauri (cargo tauri dev lanza ng serve gracias a beforeDevCommand).
 dev:
     (cd src-tauri && cargo tauri dev)
-
 
 # Actualiza los paq uetes de rust
 update:
@@ -34,3 +32,15 @@ install_all: install_dev install_backend install_tauri
 install_backend:
     (cd backend && uv --no-config venv .venv)
     (cd backend && uv --no-config sync)
+
+# Ejecuta los tests del backend con pytest.
+test_backend:
+    (cd backend && source .venv/bin/activate && pytest -q)
+
+# Ejecuta los tests del backend mostrando prints (captura deshabilitada).
+test_backend_verbose:
+    (cd backend && source .venv/bin/activate && pytest -s)
+
+# Ejecuta los tests del frontend (Angular) en modo headless.
+test_frontend:
+    (cd frontend && npm test -- --watch=false --browsers=ChromeHeadless)
