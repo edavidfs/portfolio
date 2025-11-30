@@ -12,12 +12,8 @@ export class ImportsViewComponent {
   private data = inject(DataService);
   showResetConfirm = false;
   resettingDb = false;
-  onTrades(e:any){ const files:FileList = e.target.files; this.data.parseFiles(files, async flat => { await this.data.importTradesAndCash(flat); }); }
-  onTransfers(e:any){
-    const files:FileList = e.target.files;
-    this.data.parseFiles(files, async flat => { await this.data.importTradesAndCash(flat); });
-    try { if (e?.target) e.target.value = ''; } catch {}
-  }
+  onTrades(e:any){ const files:FileList = e.target.files; this.data.importTradesCsv(files); }
+  onTransfers(e:any){ const files:FileList = e.target.files; this.data.importTradesCsv(files); try { if (e?.target) e.target.value = ''; } catch {} }
   onDividends(e:any){ const files:FileList = e.target.files; this.data.parseFiles(files, async flat => { await this.data.importDividends(flat); }); }
   async onUpdatePrices(){ await this.data.updateAllPrices(); }
   openResetConfirm(){ this.showResetConfirm = true; }

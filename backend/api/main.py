@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Query
 try:
@@ -34,7 +34,7 @@ from pydantic import BaseModel
 from db import ensure_schema, get_connection
 from prices import list_price_series, latest_prices_for_tickers, sync_prices_for_tickers
 from fx import sync_fx_for_currencies
-from logging_config import configure_root_logging, LOG_PATH
+from logging_config import configure_root_logging, log_path_from_env
 from .portfolio_service import (
   _parse_date,
   _parse_db_datetime,
@@ -87,7 +87,9 @@ def run_importer(kind: str, rows: List[Dict[str, Any]]):
   Se usa para procesar CSV crudos (trades/transfers/dividends) y persistirlos en SQLite.
   """
   db_path = ensure_db_ready()
-  log_path = db_path.with_suffix('.log')
+  log_path = log_path_from_env()
+  # logging.info(f"PRE Run importer 1: {json.dumps(rows[0], ensure_ascii=False, indent=2)}")
+  # logging.info(f"PRE Run importer -1: {json.dumps(rows[-10], ensure_ascii=False, indent=2)}")
   with tempfile.NamedTemporaryFile('w', delete=False, suffix='.json') as handle:
     json.dump(rows, handle, ensure_ascii=False, default=str)
     payload_path = Path(handle.name)
@@ -108,6 +110,36 @@ def run_importer(kind: str, rows: List[Dict[str, Any]]):
   finally:
     try:
       payload_path.unlink(missing_ok=True)
+    except Exception:
+      pass
+
+
+def run_importer_from_csv(kind: str, csv_text: str):
+  """
+  Ejecuta el importador pasando un CSV crudo (sin parseo en frontend).
+  """
+  db_path = ensure_db_ready()
+  log_path = log_path_from_env()
+  with tempfile.NamedTemporaryFile('w', delete=False, suffix='.csv') as handle:
+    handle.write(csv_text)
+    csv_path = Path(handle.name)
+  cmd = [
+    'python3',
+    str(IMPORTER_PATH),
+    '--db', str(db_path),
+    '--kind', kind,
+    '--log', str(log_path),
+    str(csv_path)
+  ]
+  try:
+    out = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    return out.stdout.strip()
+  except subprocess.CalledProcessError as exc:
+    err = exc.stderr.strip() or exc.stdout.strip() or 'Fallo al ejecutar el importador'
+    raise HTTPException(status_code=500, detail=f'Importador falló: {err}')
+  finally:
+    try:
+      csv_path.unlink(missing_ok=True)
     except Exception:
       pass
 
@@ -285,18 +317,36 @@ def sync_fx(payload: TickersPayload):
 def import_transfers(payload: RowsPayload):
   if not payload.rows:
     raise HTTPException(status_code=400, detail='No se enviaron filas a importar.')
+  
   run_importer('transfers', payload.rows)
   return {'status': 'ok', 'rows': len(payload.rows)}
 
 
 @app.post('/import/trades')
-def import_trades(payload: RowsPayload):
-  if not payload.rows:
+async def import_trades(request: Request):
+  content_type = (request.headers.get("content-type") or "").lower()
+
+  if content_type.startswith("text/plain"):
+    body_bytes = await request.body()
+    body = body_bytes.decode("utf-8")
+    if not body.strip():
+      raise HTTPException(status_code=400, detail='No se enviaron datos CSV.')
+    run_importer_from_csv('trades', body)
+    return {'status': 'ok', 'rows': None}
+
+  try:
+    json_body = await request.json()
+  except Exception:
+    raise HTTPException(status_code=400, detail='Cuerpo no válido; se esperaba JSON con filas o CSV en text/plain.')
+
+  rows = json_body.get('rows') if isinstance(json_body, dict) else None
+  if not rows:
     raise HTTPException(status_code=400, detail='No se enviaron filas a importar.')
-  run_importer('trades', payload.rows)
+
+  run_importer('trades', rows)
   # Sincronizar FX para las divisas detectadas en los trades importados
   currencies = set()
-  for row in payload.rows:
+  for row in rows:
     cur = (row.get('CurrencyPrimary') or row.get('currency') or '').upper()
     if cur:
       currencies.add(cur)

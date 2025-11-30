@@ -286,6 +286,27 @@ export class DataService {
     await this.syncTransfersFromBackend();
   }
 
+  async importTradesCsv(files: FileList){
+    const arr = Array.from(files || []);
+    if (!arr.length) return;
+    const contents = await Promise.all(arr.map(f => f.text()));
+    const body = contents.join('\n');
+    if (!body.trim()) {
+      this.toast.info('El archivo está vacío.');
+      return;
+    }
+    try {
+      await this.apiPostRaw('/import/trades', body, 'text/plain');
+      this.toast.success(`Importación enviada (${arr.length} archivo/s).`);
+      await this.syncTradesFromBackend();
+      await this.syncTransfersFromBackend();
+    } catch (error:any) {
+      console.error('importTradesCsv', error);
+      const msg = typeof error === 'string' ? error : error?.message || 'Error al importar CSV.';
+      this.toast.error(msg);
+    }
+  }
+
   async importTransfersFromBackendPayload(rows:any[]){
     if (!rows.length) return;
     try {
@@ -760,6 +781,19 @@ export class DataService {
       method: 'POST',
       headers: body ? { 'Content-Type': 'application/json' } : undefined,
       body: body ? JSON.stringify(body) : undefined
+    });
+    if (!resp.ok) {
+      const detail = await resp.text();
+      throw new Error(detail || `Error al enviar a ${path}`);
+    }
+    return resp.json();
+  }
+
+  private async apiPostRaw(path: string, body: string, contentType: string){
+    const resp = await fetch(`${this.apiBase}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': contentType },
+      body
     });
     if (!resp.ok) {
       const detail = await resp.text();

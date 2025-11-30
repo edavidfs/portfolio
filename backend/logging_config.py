@@ -33,10 +33,13 @@ def log_path_from_env() -> Path:
   return base / "backend-fastapi.log"
 
 
+# LOG_PATH se recalcula cada vez que se configure el logging para respetar .env actualizado.
 LOG_PATH = log_path_from_env()
 
 
 def configure_root_logging():
+  global LOG_PATH
+  LOG_PATH = log_path_from_env()
   LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
   if not logging.getLogger().handlers:
     logging.basicConfig(
@@ -49,7 +52,8 @@ def configure_root_logging():
 
 
 def get_file_handler():
-  LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-  handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
+  path = log_path_from_env()
+  path.parent.mkdir(parents=True, exist_ok=True)
+  handler = logging.FileHandler(path, encoding="utf-8")
   handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s"))
   return handler
