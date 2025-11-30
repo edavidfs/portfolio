@@ -1,5 +1,9 @@
 set shell := ["bash", "-lc"]
 
+# List available recipes
+default:
+    @just --list
+    
 # Empaqueta la app Angular dentro del wrapper Tauri.
 build:
     (cd frontend && npm run build)
@@ -44,3 +48,9 @@ test_backend_verbose:
 # Ejecuta los tests del frontend (Angular) en modo headless.
 test_frontend:
     (cd frontend && npm test -- --watch=false --browsers=ChromeHeadless)
+
+# Limpia artefactos de build y cachés (frontend/backend/tauri).
+clean:
+    rm -rf frontend/dist frontend/.angular frontend/.cache frontend/node_modules/.cache
+    rm -rf backend/.pytest_cache backend/.ruff_cache backend/.mypy_cache backend/__pycache__ backend/.coverage
+    rm -rf src-tauri/target
