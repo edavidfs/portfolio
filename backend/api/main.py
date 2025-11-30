@@ -357,7 +357,7 @@ async def import_trades(request: Request):
       sync_fx_for_currencies(conn, base_currency, currencies)
     finally:
       conn.close()
-  return {'status': 'ok', 'rows': len(payload.rows)}
+  return {'status': 'ok', 'rows': len(rows)}
 
 
 @app.post('/import/dividends')
