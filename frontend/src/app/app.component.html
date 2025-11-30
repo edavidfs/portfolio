@@ -1,0 +1,40 @@
+<div class="flex flex-col h-screen bg-slate-50">
+  <app-topbar></app-topbar>
+  <app-toasts></app-toasts>
+  <div class="flex flex-1 min-h-0 w-full px-4 sm:px-6 lg:px-10 gap-4 py-4 pb-20">
+    <app-sidebar
+      class="h-full"
+      [view]="view()"
+      [checking]="data.serviceChecking()"
+      [available]="data.serviceAvailable()"
+      [syncingFx]="data.syncingFx()"
+      (viewChange)="setView($event)"
+      (syncFxClick)="data.syncFx()"
+    ></app-sidebar>
+    <app-content-layout>
+      <app-dashboard *ngIf="view() === 'dashboard'"></app-dashboard>
+      <app-positions-view *ngIf="view() === 'positions'"></app-positions-view>
+      <app-cash-view *ngIf="view() === 'cash'"></app-cash-view>
+      <app-transfers-view *ngIf="view() === 'transfers'"></app-transfers-view>
+      <app-dividends-view *ngIf="view() === 'dividends'"></app-dividends-view>
+      <app-imports-view *ngIf="view() === 'imports'"></app-imports-view>
+      <app-config-view *ngIf="view() === 'config'"></app-config-view>
+    </app-content-layout>
+  </div>
+  <app-bottombar
+    [checking]="data.serviceChecking()"
+    [available]="data.serviceAvailable()"
+    [error]="data.serviceError()"
+    [message]="data.syncFxMessage()"
+    (retry)="data.init()"
+  ></app-bottombar>
+</div>
+
+<div *ngIf="isDetail()" class="fixed inset-0 z-40 flex items-start justify-center bg-black/60 p-6 overflow-y-auto" (click)="closeDetail()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl min-h-[80vh] relative" (click)="$event.stopPropagation()">
+    <button class="absolute top-3 right-3 text-sm px-3 py-1.5 rounded border hover:bg-gray-50" (click)="closeDetail()">Cerrar ✕</button>
+    <div class="max-h-[90vh] overflow-y-auto">
+      <router-outlet></router-outlet>
+    </div>
+  </div>
+</div>

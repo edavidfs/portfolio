@@ -1,0 +1,24 @@
+<aside class="w-64 bg-white border border-slate-200 p-4 space-y-3 flex flex-col overflow-y-auto rounded-xl shadow-sm h-full">
+  <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 px-2">Navegación</p>
+  <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 disabled:opacity-60 disabled:cursor-not-allowed transition"
+    [class.bg-indigo-50]="view === 'dashboard'" (click)="onViewChange('dashboard')" [disabled]="checking || !available">Dashboard</button>
+  <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 disabled:opacity-60 disabled:cursor-not-allowed transition"
+    [class.bg-indigo-50]="view === 'positions'" (click)="onViewChange('positions')" [disabled]="checking || !available">Posiciones</button>
+  <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 disabled:opacity-60 disabled:cursor-not-allowed transition"
+    [class.bg-indigo-50]="view === 'cash'" (click)="onViewChange('cash')" [disabled]="checking || !available">Efectivo</button>
+  <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 disabled:opacity-60 disabled:cursor-not-allowed transition"
+    [class.bg-indigo-50]="view === 'transfers'" (click)="onViewChange('transfers')" [disabled]="checking || !available">Transferencias</button>
+  <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 disabled:opacity-60 disabled:cursor-not-allowed transition"
+    [class.bg-indigo-50]="view === 'dividends'" (click)="onViewChange('dividends')" [disabled]="checking || !available">Dividendos</button>
+  <div class="pt-2 border-t border-slate-200"></div>
+  <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 disabled:opacity-60 disabled:cursor-not-allowed transition"
+    [class.bg-indigo-50]="view === 'imports'" (click)="onViewChange('imports')" [disabled]="checking || !available">Importaciones</button>
+  <button class="w-full text-left px-3 py-2 rounded-lg hover:bg-indigo-50 disabled:opacity-60 disabled:cursor-not-allowed transition"
+    [class.bg-indigo-50]="view === 'config'" (click)="onViewChange('config')" [disabled]="checking || !available">Configuración</button>
+  <div class="pt-2 border-t border-slate-200"></div>
+  <button class="w-full text-left px-3 py-2 rounded-lg border border-indigo-100 hover:bg-indigo-50 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed transition"
+    (click)="onSyncFx()" [disabled]="syncingFx || checking || !available">
+    <span>Sincronizar FX</span>
+    <span *ngIf="syncingFx" class="text-xs text-indigo-600">Actualizando...</span>
+  </button>
+</aside>

@@ -1,0 +1,29 @@
+<section class="space-y-6">
+  <div class="bg-white rounded-xl shadow-sm border p-4 min-h-[320px]">
+    <h3 class="text-sm font-semibold text-slate-600 mb-2">Evolución de capital por divisa</h3>
+    <div class="h-72">
+      <canvas id="transfersChart"></canvas>
+    </div>
+    <p class="text-xs text-slate-500 mt-2">Incluye transferencias externas e internas; no se valoran operaciones ni dividendos.</p>
+  </div>
+
+  <div class="bg-white rounded-xl shadow-sm border p-4">
+    <h3 class="text-sm font-semibold text-slate-600 mb-2">Transferencias completas</h3>
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+          <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Importe</th>
+          <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase tracking-wider">Moneda</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        <tr *ngFor="let r of rows()">
+          <td class="px-3 py-2">{{ r.DateTime | date:'dd/MM/yyyy' }}</td>
+          <td class="px-3 py-2">{{ r.Amount | number:'1.2-2' }}</td>
+          <td class="px-3 py-2">{{ r.CurrencyPrimary }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
